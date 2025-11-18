@@ -39,18 +39,29 @@ function PropertyDetail() {
   const fetchPropertyData = async () => {
     try {
       setLoading(true)
-      const [propertyRes, hourlyRes, hourly7DaysRes, networksRes, ongoingRes] = await Promise.all([
+
+      // Fetch required data
+      const [propertyRes, hourlyRes, hourly7DaysRes, networksRes] = await Promise.all([
         axios.get(`/api/property/${id}`),
         axios.get(`/api/property/${id}/hourly`),
         axios.get(`/api/property/${id}/hourly-7days`),
-        axios.get(`/api/property/${id}/networks`),
-        axios.get(`/api/property/${id}/ongoing-outages`)
+        axios.get(`/api/property/${id}/networks`)
       ])
 
       setProperty(propertyRes.data.property)
       setXponShelves(propertyRes.data.xpon_shelves || [])
       setRouters7x50(propertyRes.data.routers_7x50 || [])
-      setOngoingOutages(ongoingRes.data)
+
+      // Try to fetch ongoing outages (optional - may not exist in all databases)
+      let ongoingData = []
+      try {
+        const ongoingRes = await axios.get(`/api/property/${id}/ongoing-outages`)
+        ongoingData = ongoingRes.data
+        setOngoingOutages(ongoingData)
+      } catch (err) {
+        console.log('Ongoing outages feature not available')
+        setOngoingOutages([])
+      }
 
       // Format hourly data for chart
       const formattedHourly = hourlyRes.data.map(item => {
@@ -76,7 +87,7 @@ function PropertyDetail() {
       })
 
       // Add ongoing outages as current data point if there are any
-      if (ongoingRes.data.length > 0 && formattedHourly.length > 0) {
+      if (ongoingData.length > 0 && formattedHourly.length > 0) {
         const now = new Date()
         formattedHourly.push({
           time: now.toLocaleString('en-US', {
@@ -94,7 +105,7 @@ function PropertyDetail() {
             hour12: false
           }),
           outages: 0,
-          ongoingOutages: ongoingRes.data.length
+          ongoingOutages: ongoingData.length
         })
       }
 

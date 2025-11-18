@@ -21,16 +21,29 @@ function Dashboard() {
   const fetchData = async () => {
     try {
       setLoading(true)
-      const [statsRes, outagesRes, ongoingCountRes, ongoingOutagesRes] = await Promise.all([
+
+      // Fetch required data
+      const [statsRes, outagesRes] = await Promise.all([
         axios.get('/api/stats'),
-        axios.get('/api/property-wide-outages'),
-        axios.get('/api/ongoing-outages/count'),
-        axios.get('/api/ongoing-outages')
+        axios.get('/api/property-wide-outages')
       ])
+
       setStats(statsRes.data)
       setPropertyWideOutages(outagesRes.data)
-      setOngoingCount(ongoingCountRes.data.count)
-      setOngoingOutages(ongoingOutagesRes.data)
+
+      // Try to fetch ongoing outages (optional - may not exist in all databases)
+      try {
+        const [ongoingCountRes, ongoingOutagesRes] = await Promise.all([
+          axios.get('/api/ongoing-outages/count'),
+          axios.get('/api/ongoing-outages')
+        ])
+        setOngoingCount(ongoingCountRes.data.count)
+        setOngoingOutages(ongoingOutagesRes.data)
+      } catch (err) {
+        console.log('Ongoing outages feature not available (table may not exist)')
+        setOngoingCount(0)
+        setOngoingOutages([])
+      }
 
       // If property-wide outages detected, fetch AI analysis
       if (outagesRes.data.has_property_wide_outages) {
