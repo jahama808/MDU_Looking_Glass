@@ -19,7 +19,7 @@ from pushover_notifier import PushoverNotifier
 
 # Configuration
 EERO_API_TOKEN = '49925579|dofa12u9hkcopvr801gcqs7hge'
-DATABASE_PATH = './output/outages.db'
+DATABASE_PATH = 'property_outages.db'
 API_BASE_URL = 'https://api-user.e2ro.com/2.2/organizations/self/network_outages'
 
 
