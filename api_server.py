@@ -52,7 +52,7 @@ app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=24)
 CORS(app, supports_credentials=True)  # Enable CORS with credentials for session cookies
 
 # Database configuration
-DATABASE = os.environ.get('OUTAGES_DB', './output/outages.db')
+DATABASE = os.environ.get('OUTAGES_DB', 'property_outages.db')
 
 # Cache for AI analysis - stores analysis until input data changes
 # Format: {cache_key: {'analysis': ..., 'timestamp': ..., 'data_hash': ...}}
