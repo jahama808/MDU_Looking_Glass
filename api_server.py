@@ -592,17 +592,49 @@ def get_network(network_id):
 def get_network_hourly(network_id):
     """Get hourly outage data for a network."""
     conn = get_db_connection()
-    
+
     hourly = conn.execute("""
         SELECT outage_hour, outage_count
         FROM network_hourly_outages
         WHERE network_id = ?
         ORDER BY outage_hour
     """, (network_id,)).fetchall()
-    
+
     conn.close()
-    
+
     return jsonify([dict(h) for h in hourly])
+
+
+@app.route('/api/network/<int:network_id>/ongoing-outages')
+def get_network_ongoing_outages(network_id):
+    """Get ongoing outages for a specific network."""
+    conn = get_db_connection()
+
+    # Check if ongoing_outages table exists
+    table_check = conn.execute("""
+        SELECT name FROM sqlite_master
+        WHERE type='table' AND name='ongoing_outages'
+    """).fetchone()
+
+    if not table_check:
+        conn.close()
+        return jsonify([])
+
+    ongoing = conn.execute("""
+        SELECT oo.ongoing_outage_id, oo.network_id, oo.wan_down_start, oo.wan_down_end,
+               oo.reason, oo.first_detected, oo.last_checked,
+               n.street_address, n.subloc, n.customer_name,
+               p.property_id, p.property_name
+        FROM ongoing_outages oo
+        JOIN networks n ON oo.network_id = n.network_id
+        JOIN properties p ON n.property_id = p.property_id
+        WHERE oo.network_id = ? AND oo.wan_down_end IS NULL
+        ORDER BY oo.wan_down_start DESC
+    """, (network_id,)).fetchall()
+
+    conn.close()
+
+    return jsonify([dict(o) for o in ongoing])
 
 
 @app.route('/api/stats')

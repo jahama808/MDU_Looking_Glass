@@ -8,6 +8,7 @@ function NetworkDetail() {
   const { id } = useParams()
   const [network, setNetwork] = useState(null)
   const [hourlyData, setHourlyData] = useState([])
+  const [ongoingOutages, setOngoingOutages] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -24,6 +25,15 @@ function NetworkDetail() {
       ])
 
       setNetwork(networkRes.data)
+
+      // Try to fetch ongoing outages (optional)
+      try {
+        const ongoingRes = await axios.get(`/api/network/${id}/ongoing-outages`)
+        setOngoingOutages(ongoingRes.data)
+      } catch (err) {
+        console.log('Ongoing outages feature not available')
+        setOngoingOutages([])
+      }
 
       // Format hourly data for chart
       const formattedHourly = hourlyRes.data.map(item => ({
@@ -81,7 +91,14 @@ function NetworkDetail() {
           </div>
           <div className="info-row">
             <span className="label">Property:</span>
-            <span className="value">{network.property_name}</span>
+            <span className="value">
+              <Link
+                to={`/property/${network.property_id}`}
+                style={{color: '#667eea', textDecoration: 'none', fontWeight: '600'}}
+              >
+                {network.property_name}
+              </Link>
+            </span>
           </div>
           <div className="info-row">
             <span className="label">Address:</span>
@@ -101,6 +118,57 @@ function NetworkDetail() {
           </div>
         </div>
       </div>
+
+      {ongoingOutages.length > 0 && (
+        <div className="ongoing-outages-section">
+          <h2>🔴 Network Currently Down</h2>
+          <div className="ongoing-outages-alert">
+            <strong>Active Outage:</strong> This network is currently experiencing an outage.
+          </div>
+          <div className="ongoing-networks-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Network ID</th>
+                  <th>Address</th>
+                  <th>Unit</th>
+                  <th>Customer</th>
+                  <th>Start Time</th>
+                  <th>Duration</th>
+                  <th>Reason</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ongoingOutages.map((outage) => {
+                  const startTime = new Date(outage.wan_down_start)
+                  const duration = Math.floor((new Date() - startTime) / (1000 * 60 * 60)) // hours
+
+                  return (
+                    <tr key={outage.ongoing_outage_id} className="ongoing-outage-row">
+                      <td>
+                        <a
+                          href={`https://insight.eero.com/networks/${Math.floor(outage.network_id)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          {Math.floor(outage.network_id)}
+                        </a>
+                        <span className="ongoing-indicator">LIVE</span>
+                      </td>
+                      <td>{outage.street_address || 'N/A'}</td>
+                      <td>{outage.subloc || 'N/A'}</td>
+                      <td>{outage.customer_name || 'N/A'}</td>
+                      <td>{startTime.toLocaleString()}</td>
+                      <td style={{ color: '#ffa500', fontWeight: '500' }}>{duration}h</td>
+                      <td>{outage.reason || 'Unknown'}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {hourlyData.length > 0 && (
         <div className="chart-section">

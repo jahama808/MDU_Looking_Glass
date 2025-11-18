@@ -47,6 +47,144 @@
   font-size: 1.5rem;
 }
 
+.ongoing-outages-section {
+  background: #2d333b;
+  border: 1px solid #3d444d;
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 1rem;
+  border-left: 3px solid #ffa500;
+}
+
+.ongoing-outages-section h2 {
+  color: #e0e0e0;
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  padding: 0.75rem 1rem;
+  background: #22272e;
+  border-bottom: 1px solid #3d444d;
+}
+
+.ongoing-outages-alert {
+  background: #2d1f1f;
+  padding: 0.75rem 1rem;
+  border-left: 3px solid #ffa500;
+  color: #ffa500;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.ongoing-networks-table {
+  overflow-x: auto;
+  padding: 1rem;
+}
+
+.ongoing-networks-table table {
+  width: 950px;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.ongoing-networks-table th,
+.ongoing-networks-table td {
+  padding: 0.75rem 0.5rem;
+  text-align: left;
+  border-bottom: 1px solid #3d444d;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: table-cell !important;
+}
+
+.ongoing-networks-table th:nth-child(1),
+.ongoing-networks-table td:nth-child(1) {
+  width: 110px;
+}
+
+.ongoing-networks-table th:nth-child(2),
+.ongoing-networks-table td:nth-child(2) {
+  width: 180px;
+}
+
+.ongoing-networks-table th:nth-child(3),
+.ongoing-networks-table td:nth-child(3) {
+  width: 70px;
+}
+
+.ongoing-networks-table th:nth-child(4),
+.ongoing-networks-table td:nth-child(4) {
+  width: 140px;
+}
+
+.ongoing-networks-table th:nth-child(5),
+.ongoing-networks-table td:nth-child(5) {
+  width: 160px;
+}
+
+.ongoing-networks-table th:nth-child(6),
+.ongoing-networks-table td:nth-child(6) {
+  width: 80px;
+}
+
+.ongoing-networks-table th:nth-child(7),
+.ongoing-networks-table td:nth-child(7) {
+  width: 90px;
+}
+
+.ongoing-networks-table th {
+  background: #22272e;
+  font-weight: 600;
+  color: #8b92a6;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+}
+
+.ongoing-networks-table tbody tr {
+  transition: background 0.2s;
+}
+
+.ongoing-networks-table tbody tr:hover {
+  background: #22272e;
+}
+
+.ongoing-networks-table td {
+  color: #e0e0e0;
+}
+
+.ongoing-networks-table td a {
+  color: #5dade2 !important;
+  text-decoration: none !important;
+  font-weight: 500 !important;
+}
+
+.ongoing-networks-table td a:hover {
+  color: #3498db !important;
+  text-decoration: underline !important;
+}
+
+.ongoing-indicator {
+  background-color: #ffa500;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  margin-left: 8px;
+  display: inline-block;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
 .chart-section {
   background: var(--bg-card);
   padding: 2rem;
