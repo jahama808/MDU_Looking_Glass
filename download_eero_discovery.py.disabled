@@ -1,0 +1,316 @@
+#!/usr/bin/env python3
+"""
+Download Eero Discovery file from API and process into database
+"""
+import requests
+import os
+import sys
+from datetime import datetime
+import subprocess
+import shutil
+
+# Configuration
+EERO_API_TOKEN = '49925579|dofa12u9hkcopvr801gcqs7hge'
+INPUTS_DIR = './inputs'
+PROCESSED_DIR = './inputs_already_read'
+DATABASE_PATH = './output/outages.db'
+
+def get_eero_discovery_artifact():
+    """Get the latest Eero Discovery (networks) artifact_id from Eero API."""
+    print("\n" + "="*80)
+    print("STEP 1: Fetching available datasets from Eero API")
+    print("="*80)
+
+    # Get today's date for the start parameter
+    today = datetime.now().strftime('%Y-%m-%d')
+    url = f"https://api-user.e2ro.com/2.2/organizations/self/data_aggregation_jobs?start={today}T00:00:00Z"
+
+    headers = {'X-User-Token': EERO_API_TOKEN}
+
+    response = requests.get(url, headers=headers)
+
+    if response.status_code != 200:
+        print(f"✗ Error fetching datasets: {response.status_code}")
+        print(response.text)
+        return None
+
+    data = response.json()
+    jobs = data['data']['aggregation_jobs']
+
+    print(f"✓ Found {len(jobs)} datasets")
+
+    # Find networks (Eero Discovery)
+    for job in jobs:
+        if job['dataset'] == 'networks' and job['status'] == 'completed':
+            print(f"\n✓ Found Eero Discovery (networks) dataset:")
+            print(f"  Artifact ID: {job['artifact_id']}")
+            print(f"  Scheduled: {job['scheduled_time']}")
+            print(f"  Completed: {job['completed']}")
+            return job['artifact_id']
+
+    print("✗ Eero Discovery dataset not found")
+    return None
+
+
+def get_download_url(artifact_id):
+    """Get download URL for the artifact."""
+    print("\n" + "="*80)
+    print("STEP 2: Fetching download URL")
+    print("="*80)
+
+    url = f"https://api-user.e2ro.com/2.2/organizations/self/data_artifacts/{artifact_id}?download_link=true"
+    headers = {'X-User-Token': EERO_API_TOKEN}
+
+    response = requests.get(url, headers=headers)
+
+    if response.status_code != 200:
+        print(f"✗ Error fetching download URL: {response.status_code}")
+        print(response.text)
+        return None, None
+
+    data = response.json()
+    download_link = data['data']['download_link']
+    expires = data['data']['download_link_expires']
+
+    # Extract filename from the URL
+    filename = download_link.split('/')[-1].split('?')[0]
+
+    # Rename to match expected format
+    # From: networks-2025-11-13.csv
+    # To: Eero Discovery Details - 2025-11-13 081031.csv
+    date_str = filename.replace('networks-', '').replace('.csv', '')
+    time_str = datetime.now().strftime('%H%M%S')
+    filename = f"Eero Discovery Details - {date_str} {time_str}.csv"
+
+    print(f"✓ Download URL obtained")
+    print(f"  Filename: {filename}")
+    print(f"  Link expires: {expires}")
+
+    return download_link, filename
+
+
+def download_file(download_url, filename):
+    """Download the file to inputs directory."""
+    print("\n" + "="*80)
+    print("STEP 3: Downloading file")
+    print("="*80)
+
+    os.makedirs(INPUTS_DIR, exist_ok=True)
+    filepath = os.path.join(INPUTS_DIR, filename)
+
+    # Check if already downloaded
+    if os.path.exists(filepath):
+        print(f"⚠ File already exists in inputs: {filename}")
+        return filepath
+
+    print(f"  Downloading to: {filepath}")
+
+    response = requests.get(download_url, stream=True)
+
+    if response.status_code != 200:
+        print(f"✗ Error downloading file: {response.status_code}")
+        return None
+
+    # Download with progress
+    total_size = int(response.headers.get('content-length', 0))
+    block_size = 8192
+    downloaded = 0
+
+    with open(filepath, 'wb') as f:
+        for chunk in response.iter_content(chunk_size=block_size):
+            if chunk:
+                f.write(chunk)
+                downloaded += len(chunk)
+                if total_size > 0:
+                    percent = (downloaded / total_size) * 100
+                    print(f"\r  Progress: {percent:.1f}%", end='', flush=True)
+
+    print(f"\n✓ File downloaded successfully")
+    print(f"  Size: {os.path.getsize(filepath):,} bytes")
+
+    return filepath
+
+
+def check_already_processed(filename):
+    """Check if file has already been processed."""
+    print("\n" + "="*80)
+    print("STEP 4: Checking if already processed")
+    print("="*80)
+
+    # Check in inputs_already_read directory and subdirectories
+    if os.path.exists(PROCESSED_DIR):
+        for root, dirs, files in os.walk(PROCESSED_DIR):
+            if filename in files:
+                processed_path = os.path.join(root, filename)
+                print(f"⚠ File already processed: {processed_path}")
+                return True
+
+    print(f"✓ File is new and needs processing")
+    return False
+
+
+def process_file(discovery_filepath, outages_filepath=None):
+    """Process the discovery file into the database."""
+    print("\n" + "="*80)
+    print("STEP 5: Processing file into database")
+    print("="*80)
+
+    # If no outages file specified, use the most recent one from archive
+    if not outages_filepath:
+        # Find most recent network_outages file
+        most_recent = None
+        most_recent_time = 0
+
+        if os.path.exists(PROCESSED_DIR):
+            for root, dirs, files in os.walk(PROCESSED_DIR):
+                for file in files:
+                    if file.startswith('network_outages-') and file.endswith('.csv'):
+                        filepath = os.path.join(root, file)
+                        mtime = os.path.getmtime(filepath)
+                        if mtime > most_recent_time:
+                            most_recent = filepath
+                            most_recent_time = mtime
+
+        if most_recent:
+            outages_filepath = most_recent
+            print(f"  Using most recent outages file: {outages_filepath}")
+        else:
+            print(f"  ⚠ No outages file found - processing discovery only")
+
+    # Build command
+    cmd = [
+        './venv/bin/python3',
+        'process_property_outages_db.py',
+        '--discovery-file', discovery_filepath,
+        '--database', DATABASE_PATH,
+        '--mode', 'append'
+    ]
+
+    # Add outages file if we have one
+    if outages_filepath:
+        # Need a dummy outages file for the required argument
+        # Create empty temp file if needed
+        if not os.path.exists(outages_filepath):
+            print(f"  Creating empty outages placeholder")
+            temp_outages = os.path.join(INPUTS_DIR, 'temp_outages.csv')
+            with open(temp_outages, 'w') as f:
+                f.write('network_id,start_time,end_time\n')
+            outages_filepath = temp_outages
+
+        cmd.insert(3, '--outages-file')
+        cmd.insert(4, outages_filepath)
+    else:
+        # Create empty temp outages file for required argument
+        temp_outages = os.path.join(INPUTS_DIR, 'temp_outages.csv')
+        with open(temp_outages, 'w') as f:
+            f.write('network_id,start_time,end_time\n')
+        cmd.insert(3, '--outages-file')
+        cmd.insert(4, temp_outages)
+
+    print(f"  Running: {' '.join(cmd)}")
+    print()
+
+    try:
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+        print(result.stdout)
+        if result.stderr:
+            print("STDERR:", result.stderr)
+
+        # Clean up temp file if created
+        if 'temp_outages' in locals():
+            try:
+                os.remove(temp_outages)
+            except:
+                pass
+
+        print("✓ Processing completed successfully")
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"✗ Processing failed with exit code {e.returncode}")
+        print("STDOUT:", e.stdout)
+        print("STDERR:", e.stderr)
+        return False
+
+
+def archive_file(filepath):
+    """Move processed file to inputs_already_read with timestamp directory."""
+    print("\n" + "="*80)
+    print("STEP 6: Archiving processed file")
+    print("="*80)
+
+    # Create timestamped directory
+    timestamp = datetime.now().strftime('%Y-%m-%d_%H%M%S')
+    archive_dir = os.path.join(PROCESSED_DIR, timestamp)
+    os.makedirs(archive_dir, exist_ok=True)
+
+    filename = os.path.basename(filepath)
+    archive_path = os.path.join(archive_dir, filename)
+
+    shutil.move(filepath, archive_path)
+
+    print(f"✓ File archived to: {archive_path}")
+    return archive_path
+
+
+def main():
+    print("\n" + "="*80)
+    print("EERO DISCOVERY FILE DOWNLOAD AND PROCESSING")
+    print("="*80)
+    print(f"Start time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+
+    # Step 1: Get artifact_id
+    artifact_id = get_eero_discovery_artifact()
+    if not artifact_id:
+        print("\n✗ Failed to get artifact_id")
+        sys.exit(1)
+
+    # Step 2: Get download URL
+    download_url, filename = get_download_url(artifact_id)
+    if not download_url:
+        print("\n✗ Failed to get download URL")
+        sys.exit(1)
+
+    # Step 3: Download file
+    filepath = download_file(download_url, filename)
+    if not filepath:
+        print("\n✗ Failed to download file")
+        sys.exit(1)
+
+    # Step 4: Check if already processed
+    if check_already_processed(filename):
+        print("\n" + "="*80)
+        print("FILE ALREADY PROCESSED - SKIPPING")
+        print("="*80)
+        print(f"\nDeleting duplicate download: {filepath}")
+        os.remove(filepath)
+        print("✓ Cleanup complete")
+        sys.exit(0)
+
+    # Step 5: Process file
+    if not process_file(filepath):
+        print("\n✗ Processing failed - file NOT archived")
+        sys.exit(1)
+
+    # Step 6: Archive file
+    archive_path = archive_file(filepath)
+
+    print("\n" + "="*80)
+    print("SUCCESS - ALL STEPS COMPLETED")
+    print("="*80)
+    print(f"Processed file: {filename}")
+    print(f"Archived to: {archive_path}")
+    print(f"Database: {DATABASE_PATH}")
+    print(f"\nEnd time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n\n✗ Interrupted by user")
+        sys.exit(130)
+    except Exception as e:
+        print(f"\n✗ Unexpected error: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)

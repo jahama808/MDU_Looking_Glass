@@ -1,0 +1,14 @@
+[Unit]
+Description=Run Property Outage Dashboard auto-processing every 6 hours
+Requires=outage-auto-process.service
+
+[Timer]
+# Run every 6 hours
+OnCalendar=*-*-* 00,06,12,18:00:00
+# Run 5 minutes after boot if missed
+OnBootSec=5min
+# If the system was off when the timer should have triggered, run it as soon as possible
+Persistent=true
+
+[Install]
+WantedBy=timers.target

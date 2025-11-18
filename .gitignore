@@ -1,0 +1,61 @@
+# Python
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Database
+output/outages.db
+*.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+
+# Logs
+*.log
+*.pid
+
+# Processing reports
+processing_reports/
+
+# Data files (keep structure, not actual data)
+Backend_operations/*.csv
+Backend_operations_dbase_version/*.csv
+
+# Temporary files
+*.tmp
+*.bak
+.cache/
+
+# Data directories
+inputs/
+inputs_already_read/
+inputs_already_used/
+output/
+backups/
+
+# Tool-specific
+.claude/
+.playwright-mcp/

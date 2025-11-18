@@ -1,0 +1,74 @@
+================================================================================
+EMERGENCY DEPLOYMENT - QUICK REFERENCE CARD
+Property Outage Dashboard
+================================================================================
+
+SCENARIO: Server crash, need to deploy to new Ubuntu server FAST
+
+STEPS (5 minutes):
+================================================================================
+
+1. CREATE BACKUP (if old server is accessible)
+   --------------------------------------------------------------
+   On old server:
+   $ cd /path/to/outage-dashboard
+   $ ./create-backup.sh
+
+   File created: backups/outage-dashboard-backup-YYYY-MM-DD_HHMMSS.tar.gz
+
+
+2. COPY TO NEW SERVER
+   --------------------------------------------------------------
+   $ scp backups/outage-dashboard-backup-*.tar.gz user@NEW_SERVER:/tmp/
+
+
+3. DEPLOY ON NEW SERVER
+   --------------------------------------------------------------
+   $ ssh user@NEW_SERVER
+   $ cd ~
+   $ mkdir outage-dashboard
+   $ cd outage-dashboard
+   $ tar -xzf /tmp/outage-dashboard-backup-*.tar.gz
+   $ sudo ./emergency-install.sh
+
+
+4. VERIFY
+   --------------------------------------------------------------
+   Access: http://NEW_SERVER_IP
+
+   Check services:
+   $ sudo systemctl status outage-dashboard-api
+   $ sudo systemctl status outage-dashboard-frontend
+
+
+THAT'S IT!
+================================================================================
+
+IMPORTANT NOTES:
+- New server must be Ubuntu 20.04 or later
+- Need root/sudo access
+- Need internet connection for initial setup
+- Script installs: Python, Node.js, Nginx, and all dependencies
+- All services start automatically on boot
+
+AFTER DEPLOYMENT:
+- Update DNS if needed
+- Set up HTTPS/SSL if production
+- Verify firewall rules
+- Test auto-processing
+
+TROUBLESHOOTING:
+- Check logs: sudo journalctl -u outage-dashboard-api -f
+- Check app logs: tail -f logs/auto-process.log
+- Nginx logs: sudo tail -f /var/log/nginx/error.log
+- See EMERGENCY_DEPLOYMENT.md for detailed help
+
+BACKUP SCHEDULE:
+- Run ./create-backup.sh daily (recommended)
+- Set up cron: 0 2 * * * /path/to/create-backup.sh
+- Store backups off-site
+
+FOR DETAILED INSTRUCTIONS:
+See EMERGENCY_DEPLOYMENT.md
+
+================================================================================
