@@ -135,7 +135,7 @@ function PropertyDetail() {
       })
 
       // Add ongoing outages as current data point if there are any
-      if (ongoingRes.data.length > 0 && formatted7Days.length > 0) {
+      if (ongoingData.length > 0 && formatted7Days.length > 0) {
         const now = new Date()
         formatted7Days.push({
           time: now.toLocaleString('en-US', {
@@ -153,7 +153,7 @@ function PropertyDetail() {
             hour12: false
           }),
           outages: 0,
-          ongoingOutages: ongoingRes.data.length
+          ongoingOutages: ongoingData.length
         })
       }
 
