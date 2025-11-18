@@ -1,5 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom'
 import './App.css'
+import { AuthProvider, useAuth } from './context/AuthContext'
+import Login from './components/Login'
 import Dashboard from './components/Dashboard'
 import PropertyList from './components/PropertyList'
 import PropertyDetail from './components/PropertyDetail'
@@ -10,7 +12,22 @@ import Router7x50Detail from './components/Router7x50Detail'
 import SpeedtestPerformance from './components/SpeedtestPerformance'
 import SpeedtestTable from './components/SpeedtestTable'
 
-function App() {
+function AppContent() {
+  const { authenticated, loading, user, login, logout } = useAuth()
+
+  if (loading) {
+    return (
+      <div className="app-loading">
+        <div className="loading-spinner"></div>
+        <p>Loading...</p>
+      </div>
+    )
+  }
+
+  if (!authenticated) {
+    return <Login onLogin={login} />
+  }
+
   return (
     <Router>
       <div className="app">
@@ -22,6 +39,12 @@ function App() {
               <Link to="/properties">Properties</Link>
               <Link to="/equipment">Equipment</Link>
               <Link to="/speedtest">Speedtest</Link>
+            </div>
+            <div className="user-menu">
+              <span className="user-name">{user?.username}</span>
+              <button onClick={logout} className="logout-button">
+                Logout
+              </button>
             </div>
           </nav>
         </header>
@@ -45,6 +68,14 @@ function App() {
         </footer>
       </div>
     </Router>
+  )
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   )
 }
 

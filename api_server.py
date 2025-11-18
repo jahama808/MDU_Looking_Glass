@@ -13,8 +13,9 @@ Run the server:
 API will be available at http://localhost:5000
 """
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, session
 from flask_cors import CORS
+from functools import wraps
 import sqlite3
 import os
 import sys
@@ -22,6 +23,8 @@ from datetime import datetime, timedelta
 import anthropic
 import hashlib
 import json
+import bcrypt
+import secrets
 
 
 # Check if running in virtual environment
@@ -39,7 +42,14 @@ def check_venv():
 check_venv()
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for frontend access
+
+# Configure session and CORS
+app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', secrets.token_hex(32))
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=24)
+
+CORS(app, supports_credentials=True)  # Enable CORS with credentials for session cookies
 
 # Database configuration
 DATABASE = os.environ.get('OUTAGES_DB', './output/outages.db')
@@ -56,6 +66,116 @@ def get_db_connection():
     return conn
 
 
+# Authentication helper functions
+def hash_password(password):
+    """Hash a password using bcrypt."""
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+
+def verify_password(password, password_hash):
+    """Verify a password against its hash."""
+    return bcrypt.checkpw(password.encode('utf-8'), password_hash.encode('utf-8'))
+
+
+def create_session_token():
+    """Generate a secure session token."""
+    return secrets.token_urlsafe(32)
+
+
+def create_user_session(user_id, ip_address=None, user_agent=None):
+    """Create a new session for a user."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Generate session token
+    session_token = create_session_token()
+
+    # Set expiration (24 hours from now)
+    expires_at = (datetime.now() + timedelta(hours=24)).isoformat()
+
+    # Create session in database
+    cursor.execute("""
+        INSERT INTO sessions (user_id, session_token, expires_at, ip_address, user_agent)
+        VALUES (?, ?, ?, ?, ?)
+    """, (user_id, session_token, expires_at, ip_address, user_agent))
+
+    conn.commit()
+    conn.close()
+
+    return session_token
+
+
+def validate_session_token(session_token):
+    """Validate a session token and return user info if valid."""
+    if not session_token:
+        return None
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Get session and check if it's still valid
+    result = cursor.execute("""
+        SELECT s.session_id, s.user_id, s.expires_at, u.username, u.email, u.role
+        FROM sessions s
+        JOIN users u ON s.user_id = u.user_id
+        WHERE s.session_token = ? AND s.expires_at > ? AND u.is_active = 1
+    """, (session_token, datetime.now().isoformat())).fetchone()
+
+    if result:
+        # Update last activity
+        cursor.execute("""
+            UPDATE sessions
+            SET last_activity = CURRENT_TIMESTAMP
+            WHERE session_id = ?
+        """, (result['session_id'],))
+        conn.commit()
+        conn.close()
+
+        return {
+            'user_id': result['user_id'],
+            'username': result['username'],
+            'email': result['email'],
+            'role': result['role']
+        }
+
+    conn.close()
+    return None
+
+
+def delete_session(session_token):
+    """Delete a session (logout)."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM sessions WHERE session_token = ?", (session_token,))
+    conn.commit()
+    conn.close()
+
+
+def require_auth(f):
+    """Decorator to require authentication for a route."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # Get token from Authorization header or session
+        auth_header = request.headers.get('Authorization')
+        session_token = None
+
+        if auth_header and auth_header.startswith('Bearer '):
+            session_token = auth_header.split(' ')[1]
+        elif 'session_token' in session:
+            session_token = session['session_token']
+
+        user = validate_session_token(session_token)
+
+        if not user:
+            return jsonify({'error': 'Authentication required'}), 401
+
+        # Add user info to request context
+        request.current_user = user
+
+        return f(*args, **kwargs)
+    return decorated_function
+
+
 @app.route('/')
 def index():
     """API documentation."""
@@ -63,6 +183,10 @@ def index():
         'name': 'Property Outage API',
         'version': '1.0.0',
         'endpoints': {
+            'POST /api/auth/login': 'Login with username and password',
+            'POST /api/auth/logout': 'Logout and invalidate session',
+            'GET /api/auth/check': 'Check if current session is valid',
+            'POST /api/auth/register': 'Register new user (admin only)',
             'GET /api/properties': 'Get all properties with outages',
             'GET /api/property/<id>': 'Get property details',
             'GET /api/property/<id>/hourly': 'Get hourly outage data for property',
@@ -79,6 +203,178 @@ def index():
             'GET /api/stats': 'Get overall statistics'
         }
     })
+
+
+# Authentication endpoints
+@app.route('/api/auth/login', methods=['POST'])
+def login():
+    """Login with username and password."""
+    data = request.get_json()
+
+    if not data or 'username' not in data or 'password' not in data:
+        return jsonify({'error': 'Username and password required'}), 400
+
+    username = data['username'].strip()
+    password = data['password']
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Find user
+    user = cursor.execute("""
+        SELECT user_id, username, email, password_hash, role, is_active
+        FROM users
+        WHERE username = ? OR email = ?
+    """, (username, username)).fetchone()
+
+    if not user:
+        conn.close()
+        return jsonify({'error': 'Invalid credentials'}), 401
+
+    if not user['is_active']:
+        conn.close()
+        return jsonify({'error': 'Account is disabled'}), 403
+
+    # Verify password
+    if not verify_password(password, user['password_hash']):
+        conn.close()
+        return jsonify({'error': 'Invalid credentials'}), 401
+
+    # Update last login
+    cursor.execute("""
+        UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE user_id = ?
+    """, (user['user_id'],))
+    conn.commit()
+    conn.close()
+
+    # Create session
+    ip_address = request.remote_addr
+    user_agent = request.headers.get('User-Agent', '')
+    session_token = create_user_session(user['user_id'], ip_address, user_agent)
+
+    # Store in Flask session as well
+    session['session_token'] = session_token
+
+    return jsonify({
+        'success': True,
+        'session_token': session_token,
+        'user': {
+            'user_id': user['user_id'],
+            'username': user['username'],
+            'email': user['email'],
+            'role': user['role']
+        }
+    })
+
+
+@app.route('/api/auth/logout', methods=['POST'])
+def logout():
+    """Logout and invalidate session."""
+    # Get token from Authorization header or session
+    auth_header = request.headers.get('Authorization')
+    session_token = None
+
+    if auth_header and auth_header.startswith('Bearer '):
+        session_token = auth_header.split(' ')[1]
+    elif 'session_token' in session:
+        session_token = session['session_token']
+
+    if session_token:
+        delete_session(session_token)
+
+    # Clear Flask session
+    session.clear()
+
+    return jsonify({'success': True, 'message': 'Logged out successfully'})
+
+
+@app.route('/api/auth/check', methods=['GET'])
+def check_auth():
+    """Check if current session is valid."""
+    # Get token from Authorization header or session
+    auth_header = request.headers.get('Authorization')
+    session_token = None
+
+    if auth_header and auth_header.startswith('Bearer '):
+        session_token = auth_header.split(' ')[1]
+    elif 'session_token' in session:
+        session_token = session['session_token']
+
+    user = validate_session_token(session_token)
+
+    if user:
+        return jsonify({
+            'authenticated': True,
+            'user': user
+        })
+    else:
+        return jsonify({'authenticated': False}), 401
+
+
+@app.route('/api/auth/register', methods=['POST'])
+@require_auth
+def register_user():
+    """Register a new user (admin only)."""
+    # Check if current user is admin
+    if request.current_user['role'] != 'admin':
+        return jsonify({'error': 'Admin access required'}), 403
+
+    data = request.get_json()
+
+    if not data or 'username' not in data or 'email' not in data or 'password' not in data:
+        return jsonify({'error': 'Username, email, and password required'}), 400
+
+    username = data['username'].strip()
+    email = data['email'].strip()
+    password = data['password']
+    role = data.get('role', 'user')
+
+    # Validate password strength
+    if len(password) < 8:
+        return jsonify({'error': 'Password must be at least 8 characters'}), 400
+
+    # Validate role
+    if role not in ['user', 'admin']:
+        return jsonify({'error': 'Invalid role. Must be "user" or "admin"'}), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Check if username or email already exists
+    existing = cursor.execute("""
+        SELECT username, email FROM users
+        WHERE username = ? OR email = ?
+    """, (username, email)).fetchone()
+
+    if existing:
+        conn.close()
+        if existing['username'] == username:
+            return jsonify({'error': 'Username already exists'}), 409
+        else:
+            return jsonify({'error': 'Email already exists'}), 409
+
+    # Hash password and create user
+    password_hash = hash_password(password)
+
+    cursor.execute("""
+        INSERT INTO users (username, email, password_hash, role)
+        VALUES (?, ?, ?, ?)
+    """, (username, email, password_hash, role))
+
+    conn.commit()
+    user_id = cursor.lastrowid
+    conn.close()
+
+    return jsonify({
+        'success': True,
+        'message': 'User created successfully',
+        'user': {
+            'user_id': user_id,
+            'username': username,
+            'email': email,
+            'role': role
+        }
+    }), 201
 
 
 @app.route('/api/properties')
