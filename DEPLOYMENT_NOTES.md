@@ -2,7 +2,7 @@
 
 ## Quick Deployment Guide
 
-This document provides step-by-step instructions for deploying the Property Outage Dashboard to a new machine.
+This document provides step-by-step instructions for deploying the MDU Performance Dashboard to a new machine.
 
 ## Pre-Deployment Checklist
 
@@ -156,7 +156,7 @@ sudo firewall-cmd --reload
 5. Enter ports: 5000, 5173
 6. Allow the connection
 7. Apply to all profiles
-8. Name: "Property Outage Dashboard"
+8. Name: "MDU Performance Dashboard"
 ```
 
 **Mac:**
@@ -210,7 +210,7 @@ Serve the `dist/` directory with Nginx or Apache.
 Create `/etc/systemd/system/outage-dashboard-api.service`:
 ```ini
 [Unit]
-Description=Property Outage Dashboard API
+Description=MDU Performance Dashboard API
 After=network.target
 
 [Service]

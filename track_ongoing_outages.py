@@ -1,26 +1,27 @@
 #!/usr/bin/env python3
 """
-Script to track ongoing network outages using the Eero API.
+Script to track ongoing network outages using the Eero bulk API.
 
-This script identifies networks with recent outages and queries the Eero API
-to check if they are still experiencing outages (no end time). Stores ongoing
-outages in the ongoing_outages table for real-time visibility.
+This script fetches all currently ongoing outages from the Eero API and updates
+the ongoing_outages table for networks in our database. Much more efficient than
+the old method of querying individual networks.
 
 Usage:
-    python track_ongoing_outages.py [--lookback-hours N] [--notify]
+    python track_ongoing_outages.py [--notify] [--dry-run]
 """
 
 import requests
 import sqlite3
 import argparse
-from datetime import datetime, timedelta
-import time
+from datetime import datetime
+from urllib.parse import urljoin
 from pushover_notifier import PushoverNotifier
 
 # Configuration
 EERO_API_TOKEN = '49925579|dofa12u9hkcopvr801gcqs7hge'
 DATABASE_PATH = 'property_outages.db'
-API_BASE_URL = 'https://api-user.e2ro.com/2.2/organizations/self/network_outages'
+API_BASE_URL = 'https://api-user.e2ro.com'
+BULK_OUTAGES_ENDPOINT = '/2.2/organizations/self/network_outages/networks'
 
 
 def get_db_connection():
@@ -30,319 +31,352 @@ def get_db_connection():
     return conn
 
 
-def get_networks_with_recent_outages(lookback_hours=48):
+def fetch_all_ongoing_outages():
     """
-    Get networks that had outages in the past N hours.
-    These are candidates for ongoing outage checks.
-
-    Args:
-        lookback_hours: Number of hours to look back for recent outages
+    Fetch all pages of ongoing outages from the Eero bulk API.
 
     Returns:
-        List of network records
+        List of network outage dictionaries with end_time=null
+    """
+    all_ongoing = []
+    url = BULK_OUTAGES_ENDPOINT
+    headers = {'X-User-Token': EERO_API_TOKEN}
+    page = 1
+
+    print(f"Fetching ongoing outages from Eero API...")
+
+    while url:
+        full_url = urljoin(API_BASE_URL, url)
+
+        try:
+            response = requests.get(full_url, headers=headers, timeout=30)
+
+            if response.status_code != 200:
+                print(f"  ✗ API error {response.status_code} on page {page}")
+                print(f"    Response: {response.text[:200]}")
+                break
+
+            data = response.json()
+
+            if 'data' in data and 'networks' in data['data']:
+                networks = data['data']['networks']
+
+                # Filter for ongoing outages (end_time is null)
+                ongoing = [n for n in networks if n.get('end_time') is None]
+                all_ongoing.extend(ongoing)
+
+                print(f"  Page {page}: {len(ongoing)} ongoing outages")
+            else:
+                print(f"  ✗ Unexpected response format on page {page}")
+                break
+
+            # Check for next page
+            if 'pagination' in data and 'next' in data['pagination']:
+                url = data['pagination']['next']
+                page += 1
+            else:
+                url = None
+
+        except Exception as e:
+            print(f"  ✗ Exception on page {page}: {e}")
+            break
+
+    print(f"  Total ongoing outages from API: {len(all_ongoing)}")
+    return all_ongoing
+
+
+def get_db_network_ids():
+    """
+    Get all network IDs in our database.
+
+    Returns:
+        Set of network IDs
+    """
+    conn = get_db_connection()
+    networks = conn.execute("SELECT network_id FROM networks").fetchall()
+    conn.close()
+
+    return set(row['network_id'] for row in networks)
+
+
+def get_current_tracked_outages():
+    """
+    Get currently tracked ongoing outages from database.
+
+    Returns:
+        Dict mapping network_id to outage record
     """
     conn = get_db_connection()
 
-    cutoff_time = (datetime.now() - timedelta(hours=lookback_hours)).isoformat()
-
-    # Get networks with recent outages (either in outages or ongoing_outages table)
-    networks = conn.execute("""
-        SELECT DISTINCT
-            n.network_id,
-            n.street_address,
-            n.subloc,
-            p.property_name,
-            p.island,
-            MAX(o.wan_down_start) as last_outage_start
-        FROM networks n
-        JOIN properties p ON n.property_id = p.property_id
-        LEFT JOIN outages o ON n.network_id = o.network_id
-        WHERE o.wan_down_start >= ?
-        GROUP BY n.network_id, n.street_address, n.subloc, p.property_name, p.island
-
-        UNION
-
-        SELECT DISTINCT
-            n.network_id,
-            n.street_address,
-            n.subloc,
-            p.property_name,
-            p.island,
-            MAX(oo.wan_down_start) as last_outage_start
-        FROM networks n
-        JOIN properties p ON n.property_id = p.property_id
-        LEFT JOIN ongoing_outages oo ON n.network_id = oo.network_id
-        WHERE oo.wan_down_start >= ?
-        GROUP BY n.network_id, n.street_address, n.subloc, p.property_name, p.island
-
-        ORDER BY last_outage_start DESC
-    """, (cutoff_time, cutoff_time)).fetchall()
+    outages = conn.execute("""
+        SELECT ongoing_outage_id, network_id, wan_down_start
+        FROM ongoing_outages
+        WHERE wan_down_end IS NULL
+    """).fetchall()
 
     conn.close()
-    return networks
+
+    return {row['network_id']: dict(row) for row in outages}
 
 
-def query_eero_outage_api(network_id, lookback_hours=48):
-    """
-    Query the Eero API for outage details for a specific network.
-
-    Args:
-        network_id: Network ID to query
-        lookback_hours: How far back to query (default 48 hours)
-
-    Returns:
-        API response JSON or None if error
-    """
-    # Calculate start time
-    start_time_dt = datetime.now() - timedelta(hours=lookback_hours)
-    start_param = start_time_dt.strftime('%Y-%m-%dT%H:%M:%S.000Z')
-
-    url = f"{API_BASE_URL}/networks/{network_id}?start={start_param}"
-    headers = {
-        'X-User-Token': EERO_API_TOKEN
-    }
-
-    try:
-        response = requests.get(url, headers=headers, timeout=30)
-
-        if response.status_code == 200:
-            return response.json()
-        else:
-            print(f"  ✗ API error {response.status_code} for network {network_id}: {response.text}")
-            return None
-
-    except Exception as e:
-        print(f"  ✗ Exception querying API for network {network_id}: {e}")
-        return None
-
-
-def store_ongoing_outage(network_id, start_time, end_time=None, reason=None):
+def store_or_update_outage(network_id, start_time, reason=None, dry_run=False):
     """
     Store or update an ongoing outage in the database.
 
     Args:
         network_id: Network ID
-        start_time: Outage start time (ISO format)
-        end_time: Outage end time if resolved (ISO format)
-        reason: Outage reason
+        start_time: Outage start time (ISO format from API)
+        reason: Outage reason (usually None/Unknown from this API)
+        dry_run: If True, don't actually update database
+
+    Returns:
+        'inserted' or 'updated' or 'unchanged'
     """
+    if dry_run:
+        return 'dry_run'
+
     conn = get_db_connection()
     now = datetime.now().isoformat()
 
     # Convert API format (Z) to database format (+00:00)
-    if start_time:
-        start_time = start_time.replace('Z', '+00:00')
-    if end_time:
-        end_time = end_time.replace('Z', '+00:00')
+    start_time_db = start_time.replace('Z', '+00:00')
 
-    # Check if this ongoing outage already exists
+    # Check if this outage already exists
     existing = conn.execute("""
-        SELECT ongoing_outage_id, wan_down_end
+        SELECT ongoing_outage_id, wan_down_start, last_checked
         FROM ongoing_outages
-        WHERE network_id = ? AND wan_down_start = ?
-    """, (network_id, start_time)).fetchone()
+        WHERE network_id = ? AND wan_down_end IS NULL
+    """, (network_id,)).fetchone()
 
     if existing:
-        # Update existing record
-        conn.execute("""
-            UPDATE ongoing_outages
-            SET wan_down_end = ?, reason = ?, last_checked = ?
-            WHERE ongoing_outage_id = ?
-        """, (end_time, reason, now, existing['ongoing_outage_id']))
+        # Check if it's the same outage (same start time)
+        if existing['wan_down_start'] == start_time_db:
+            # Just update last_checked timestamp
+            conn.execute("""
+                UPDATE ongoing_outages
+                SET last_checked = ?
+                WHERE ongoing_outage_id = ?
+            """, (now, existing['ongoing_outage_id']))
+            conn.commit()
+            conn.close()
+            return 'updated'
+        else:
+            # Different outage - close the old one and insert new one
+            conn.execute("""
+                UPDATE ongoing_outages
+                SET wan_down_end = ?, last_checked = ?
+                WHERE ongoing_outage_id = ?
+            """, (start_time_db, now, existing['ongoing_outage_id']))
+
+            conn.execute("""
+                INSERT INTO ongoing_outages
+                (network_id, wan_down_start, wan_down_end, reason, first_detected, last_checked)
+                VALUES (?, ?, NULL, ?, ?, ?)
+            """, (network_id, start_time_db, reason or 'Unknown', now, now))
+
+            conn.commit()
+            conn.close()
+            return 'inserted'
     else:
-        # Insert new ongoing outage
+        # New outage - insert it
         conn.execute("""
-            INSERT INTO ongoing_outages (network_id, wan_down_start, wan_down_end, reason, first_detected, last_checked)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (network_id, start_time, end_time, reason, now, now))
+            INSERT INTO ongoing_outages
+            (network_id, wan_down_start, wan_down_end, reason, first_detected, last_checked)
+            VALUES (?, ?, NULL, ?, ?, ?)
+        """, (network_id, start_time_db, reason or 'Unknown', now, now))
 
-    conn.commit()
-    conn.close()
+        conn.commit()
+        conn.close()
+        return 'inserted'
 
 
-def remove_resolved_outage(network_id, start_time):
+def remove_stale_outages(current_outage_network_ids, dry_run=False):
     """
-    Remove an outage from ongoing_outages table (it has been resolved).
+    Remove outages from database that are no longer in the API response.
 
     Args:
-        network_id: Network ID
-        start_time: Outage start time
+        current_outage_network_ids: Set of network IDs currently down (from API)
+        dry_run: If True, don't actually update database
+
+    Returns:
+        Number of stale outages removed
     """
     conn = get_db_connection()
 
-    # Convert API format (Z) to database format (+00:00)
-    start_time = start_time.replace('Z', '+00:00')
+    # Get all tracked ongoing outages
+    tracked = conn.execute("""
+        SELECT ongoing_outage_id, network_id
+        FROM ongoing_outages
+        WHERE wan_down_end IS NULL
+    """).fetchall()
 
-    conn.execute("""
-        DELETE FROM ongoing_outages
-        WHERE network_id = ? AND wan_down_start = ?
-    """, (network_id, start_time))
+    stale_count = 0
+    now = datetime.now().isoformat()
 
-    conn.commit()
+    for row in tracked:
+        if row['network_id'] not in current_outage_network_ids:
+            # This outage is no longer in API - mark as resolved
+            if not dry_run:
+                conn.execute("""
+                    UPDATE ongoing_outages
+                    SET wan_down_end = ?, last_checked = ?
+                    WHERE ongoing_outage_id = ?
+                """, (now, now, row['ongoing_outage_id']))
+            stale_count += 1
+
+    if not dry_run:
+        conn.commit()
+
     conn.close()
+    return stale_count
 
 
-def track_ongoing_outages(lookback_hours=48):
+def track_ongoing_outages(notify=False, dry_run=False):
     """
-    Main function to track ongoing outages.
+    Main function to track ongoing outages using the bulk API.
 
     Args:
-        lookback_hours: Number of hours to look back for recent outages
+        notify: Send Pushover notification if ongoing outages found
+        dry_run: Don't update database, just report what would happen
 
     Returns:
         Dictionary with statistics
     """
     print("\n" + "="*80)
-    print("ONGOING OUTAGE TRACKER")
+    print("ONGOING OUTAGE TRACKER (BULK API)")
     print("="*80)
-    print(f"Lookback window: {lookback_hours} hours")
     print(f"Start time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    if dry_run:
+        print("DRY RUN MODE - No database changes will be made")
     print()
 
-    # Get networks with recent outages
-    print("Querying database for networks with recent outages...")
-    networks = get_networks_with_recent_outages(lookback_hours)
-    print(f"Found {len(networks)} networks to check\n")
+    # Fetch all ongoing outages from API
+    api_outages = fetch_all_ongoing_outages()
 
-    if not networks:
-        print("No networks with recent outages found.")
-        return {
-            'networks_checked': 0,
-            'ongoing_outages_found': 0,
-            'resolved_outages': 0,
-            'errors': 0
-        }
+    # Get networks in our database
+    print("\nChecking database...")
+    db_network_ids = get_db_network_ids()
+    print(f"  Networks in database: {len(db_network_ids)}")
 
-    ongoing_count = 0
-    resolved_count = 0
-    errors = 0
+    # Filter for outages affecting our networks
+    our_outages = [o for o in api_outages if o['network_id'] in db_network_ids]
+    print(f"  Ongoing outages affecting our networks: {len(our_outages)}")
 
-    for i, network in enumerate(networks, 1):
-        network_id = network['network_id']
+    # Get currently tracked outages
+    currently_tracked = get_current_tracked_outages()
+    print(f"  Currently tracked in database: {len(currently_tracked)}")
+    print()
 
-        print(f"[{i}/{len(networks)}] Network {network_id}")
-        print(f"  Property: {network['property_name']}")
-        print(f"  Address: {network['street_address']} {network['subloc'] or ''}")
+    # Process outages
+    print("Processing outages...")
+    inserted = 0
+    updated = 0
 
-        # Query the Eero API
-        api_response = query_eero_outage_api(network_id, lookback_hours)
+    current_outage_network_ids = set()
 
-        if api_response:
-            # Parse the API response
-            if 'data' in api_response and 'outages' in api_response['data']:
-                api_outages = api_response['data']['outages']
+    for outage in our_outages:
+        network_id = outage['network_id']
+        start_time = outage['start_time']
 
-                if api_outages:
-                    # Check each outage from the API
-                    for outage in api_outages:
-                        start_time = outage.get('start')
-                        end_time = outage.get('end')
-                        reason = outage.get('reason')
+        current_outage_network_ids.add(network_id)
 
-                        if not end_time:
-                            # This is an ongoing outage!
-                            print(f"  🔴 ONGOING OUTAGE detected")
-                            print(f"     Start: {start_time}")
-                            print(f"     Reason: {reason or 'Unknown'}")
+        result = store_or_update_outage(network_id, start_time, dry_run=dry_run)
 
-                            # Store in ongoing_outages table
-                            store_ongoing_outage(network_id, start_time, None, reason)
-                            ongoing_count += 1
-                        else:
-                            # This outage has ended - remove from ongoing if it exists
-                            remove_resolved_outage(network_id, start_time)
-                            resolved_count += 1
-                else:
-                    print(f"  ✓ No outages in API response")
-            else:
-                print(f"  ⚠ Unexpected API response format")
-                errors += 1
-        else:
-            print(f"  ✗ Failed to get API response")
-            errors += 1
+        if result == 'inserted':
+            inserted += 1
+            duration_hours = outage.get('duration', 0) / 3600
+            print(f"  ✓ NEW: Network {network_id} (down {duration_hours:.1f}h)")
+        elif result == 'updated':
+            updated += 1
 
-        print()
+    # Remove stale outages
+    print("\nRemoving stale outages...")
+    stale_removed = remove_stale_outages(current_outage_network_ids, dry_run=dry_run)
+    if stale_removed > 0:
+        print(f"  ✓ Removed {stale_removed} resolved outage(s)")
+    else:
+        print(f"  No stale outages to remove")
 
-        # Rate limiting - be nice to the API
-        time.sleep(0.5)
-
+    # Summary
     print("\n" + "="*80)
     print("SUMMARY")
     print("="*80)
-    print(f"Networks checked: {len(networks)}")
-    print(f"Ongoing outages found: {ongoing_count}")
-    print(f"Resolved outages: {resolved_count}")
-    print(f"Errors: {errors}")
+    print(f"Total ongoing outages in API: {len(api_outages)}")
+    print(f"Affecting our networks: {len(our_outages)}")
+    print(f"New outages added: {inserted}")
+    print(f"Existing outages updated: {updated}")
+    print(f"Stale outages removed: {stale_removed}")
     print(f"End time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("="*80 + "\n")
 
-    return {
-        'networks_checked': len(networks),
-        'ongoing_outages_found': ongoing_count,
-        'resolved_outages': resolved_count,
-        'errors': errors
+    stats = {
+        'total_api_outages': len(api_outages),
+        'our_networks_affected': len(our_outages),
+        'new_outages': inserted,
+        'updated_outages': updated,
+        'stale_removed': stale_removed
     }
 
+    # Send notification if requested
+    if notify and not dry_run and (inserted > 0 or len(our_outages) > 5):
+        send_notification(our_outages, inserted)
 
-def get_current_ongoing_outages():
+    return stats
+
+
+def send_notification(our_outages, new_count):
     """
-    Get all currently ongoing outages from the database.
+    Send Pushover notification about ongoing outages.
 
-    Returns:
-        List of ongoing outage records
+    Args:
+        our_outages: List of outages affecting our networks
+        new_count: Number of new outages detected
     """
-    conn = get_db_connection()
+    try:
+        notifier = PushoverNotifier()
 
-    outages = conn.execute("""
-        SELECT
-            oo.ongoing_outage_id,
-            oo.network_id,
-            oo.wan_down_start,
-            oo.wan_down_end,
-            oo.reason,
-            oo.first_detected,
-            oo.last_checked,
-            n.street_address,
-            n.subloc,
-            p.property_name,
-            p.island
-        FROM ongoing_outages oo
-        JOIN networks n ON oo.network_id = n.network_id
-        JOIN properties p ON n.property_id = p.property_id
-        WHERE oo.wan_down_end IS NULL
-        ORDER BY oo.wan_down_start DESC
-    """).fetchall()
+        message = f"Ongoing outages: {len(our_outages)}"
+        if new_count > 0:
+            message += f"\nNew outages: {new_count}"
 
-    conn.close()
-    return outages
+        # Add details for longest outages
+        sorted_outages = sorted(our_outages, key=lambda x: x.get('duration', 0), reverse=True)
+
+        if sorted_outages:
+            message += "\n\nLongest outages:"
+            for outage in sorted_outages[:5]:
+                duration_hours = outage.get('duration', 0) / 3600
+                message += f"\n• Network {outage['network_id']}: {duration_hours:.1f}h"
+
+        notifier.send_notification(
+            message=message,
+            title="Network Outages Update",
+            priority=0 if new_count == 0 else 1,
+            sound="intermission" if new_count == 0 else "siren"
+        )
+
+        print("Pushover notification sent")
+
+    except Exception as e:
+        print(f"Failed to send notification: {e}")
 
 
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(
-        description='Track ongoing network outages using the Eero API.',
+        description='Track ongoing network outages using the Eero bulk API.',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Check for ongoing outages (48 hour lookback)
+  # Update ongoing outages tracking
   %(prog)s
 
-  # Check with 24 hour lookback
-  %(prog)s --lookback-hours 24
-
-  # Check and send Pushover notification if ongoing outages found
+  # Send Pushover notification if outages detected
   %(prog)s --notify
 
-  # List current ongoing outages without checking API
-  %(prog)s --list-only
+  # Dry run - see what would happen without updating database
+  %(prog)s --dry-run
         """
-    )
-
-    parser.add_argument(
-        '--lookback-hours',
-        type=int,
-        default=48,
-        help='Number of hours to look back for recent outages (default: 48)'
     )
 
     parser.add_argument(
@@ -352,73 +386,16 @@ Examples:
     )
 
     parser.add_argument(
-        '--list-only',
+        '--dry-run',
         action='store_true',
-        help='Only list current ongoing outages without checking API'
+        help='Dry run mode - report changes without updating database'
     )
 
     args = parser.parse_args()
 
     try:
-        if args.list_only:
-            # Just list current ongoing outages
-            print("\n" + "="*80)
-            print("CURRENT ONGOING OUTAGES")
-            print("="*80)
-
-            outages = get_current_ongoing_outages()
-
-            if outages:
-                print(f"\nFound {len(outages)} ongoing outage(s):\n")
-                for i, outage in enumerate(outages, 1):
-                    start_time = datetime.fromisoformat(outage['wan_down_start'].replace('+00:00', ''))
-                    duration = datetime.now() - start_time
-                    hours = int(duration.total_seconds() / 3600)
-
-                    print(f"{i}. Network {outage['network_id']}")
-                    print(f"   Property: {outage['property_name']} ({outage['island']})")
-                    print(f"   Address: {outage['street_address']} {outage['subloc'] or ''}")
-                    print(f"   Start: {outage['wan_down_start']}")
-                    print(f"   Duration: {hours} hours")
-                    print(f"   Reason: {outage['reason'] or 'Unknown'}")
-                    print()
-            else:
-                print("\n✓ No ongoing outages found\n")
-
-            print("="*80 + "\n")
-            return 0
-
-        # Track ongoing outages
-        stats = track_ongoing_outages(lookback_hours=args.lookback_hours)
-
-        # Send notification if requested and ongoing outages found
-        if args.notify and stats['ongoing_outages_found'] > 0:
-            notifier = PushoverNotifier()
-
-            # Get the ongoing outages for details
-            outages = get_current_ongoing_outages()
-
-            message = f"Found {stats['ongoing_outages_found']} ongoing outage(s)\n\n"
-
-            # Add details for up to 5 outages
-            for i, outage in enumerate(outages[:5], 1):
-                start_time = datetime.fromisoformat(outage['wan_down_start'].replace('+00:00', ''))
-                duration = datetime.now() - start_time
-                hours = int(duration.total_seconds() / 3600)
-
-                message += f"{i}. {outage['property_name']}\n"
-                message += f"   Network {outage['network_id']}\n"
-                message += f"   Duration: {hours}h\n"
-
-            if len(outages) > 5:
-                message += f"\n... and {len(outages) - 5} more"
-
-            notifier.send_notification(
-                message=message,
-                title="Ongoing Outages Detected",
-                priority=1,
-                sound="siren"
-            )
+        stats = track_ongoing_outages(notify=args.notify, dry_run=args.dry_run)
+        return 0
 
     except KeyboardInterrupt:
         print("\n\n✗ Interrupted by user")
@@ -428,8 +405,6 @@ Examples:
         import traceback
         traceback.print_exc()
         return 1
-
-    return 0
 
 
 if __name__ == '__main__':

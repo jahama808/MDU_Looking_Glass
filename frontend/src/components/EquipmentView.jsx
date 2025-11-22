@@ -10,10 +10,67 @@ function EquipmentView() {
   const [error, setError] = useState(null)
   const [activeTab, setActiveTab] = useState('xpon')
   const [searchTerm, setSearchTerm] = useState('')
+  const [tooltip, setTooltip] = useState({ show: false, text: '', x: 0, y: 0 })
 
   useEffect(() => {
     fetchEquipment()
   }, [])
+
+  useEffect(() => {
+    // Add event listeners to SVG elements for tooltips
+    const handleMouseMove = (e) => {
+      const target = e.target.closest('.device')
+      if (target) {
+        const tooltipText = target.getAttribute('data-tooltip')
+        if (tooltipText) {
+          const container = document.querySelector('.topology-content')
+          if (container) {
+            const rect = container.getBoundingClientRect()
+            setTooltip({
+              show: true,
+              text: tooltipText,
+              x: e.clientX - rect.left,
+              y: e.clientY - rect.top
+            })
+          }
+        }
+      } else {
+        setTooltip({ show: false, text: '', x: 0, y: 0 })
+      }
+    }
+
+    const handleMouseLeave = () => {
+      setTooltip({ show: false, text: '', x: 0, y: 0 })
+    }
+
+    // Wait for the object to load, then attach listeners to the SVG document
+    const objectElement = document.querySelector('.topology-diagram-object')
+    if (objectElement) {
+      const attachListeners = () => {
+        const svgDoc = objectElement.contentDocument
+        if (svgDoc) {
+          svgDoc.addEventListener('mousemove', handleMouseMove)
+          svgDoc.addEventListener('mouseleave', handleMouseLeave)
+        }
+      }
+
+      // If already loaded, attach immediately
+      if (objectElement.contentDocument) {
+        attachListeners()
+      } else {
+        // Otherwise wait for load event
+        objectElement.addEventListener('load', attachListeners)
+      }
+
+      return () => {
+        const svgDoc = objectElement.contentDocument
+        if (svgDoc) {
+          svgDoc.removeEventListener('mousemove', handleMouseMove)
+          svgDoc.removeEventListener('mouseleave', handleMouseLeave)
+        }
+      }
+    }
+  }, [loading])
 
   const fetchEquipment = async () => {
     try {
@@ -72,6 +129,34 @@ function EquipmentView() {
           >
             7x50 Routers ({routers7x50.length})
           </button>
+        </div>
+      </div>
+
+      {/* Topology Map Section */}
+      <div className="topology-map-section">
+        <div className="topology-header">
+          <h2>Topology Map</h2>
+        </div>
+        <div className="topology-content" style={{ position: 'relative' }}>
+          <object
+            data="/fiber_network_architecture.svg"
+            type="image/svg+xml"
+            className="topology-diagram topology-diagram-object"
+            aria-label="Fiber Network Architecture Topology"
+          >
+            Your browser does not support SVG
+          </object>
+          {tooltip.show && (
+            <div
+              className="topology-tooltip"
+              style={{
+                left: `${tooltip.x + 15}px`,
+                top: `${tooltip.y + 15}px`
+              }}
+            >
+              {tooltip.text}
+            </div>
+          )}
         </div>
       </div>
 

@@ -123,6 +123,25 @@
   font-size: 0.95rem;
 }
 
+.user-role-badge {
+  background: #ff6b6b;
+  color: white;
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.user-role-badge:hover {
+  background: #ff5252;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(255, 107, 107, 0.4);
+}
+
 .logout-button {
   padding: 0.5rem 1.25rem;
   background-color: transparent;

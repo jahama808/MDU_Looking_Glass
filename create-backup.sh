@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #############################################################################
-# BACKUP SCRIPT - Property Outage Dashboard
+# BACKUP SCRIPT - MDU Performance Dashboard
 #
 # Creates a complete backup of the application for disaster recovery.
 #
@@ -36,7 +36,7 @@ BACKUP_NAME="outage-dashboard-backup-$TIMESTAMP"
 BACKUP_FILE="$BACKUP_DIR/$BACKUP_NAME.tar.gz"
 
 echo -e "${BLUE}========================================${NC}"
-echo -e "${BLUE}Property Outage Dashboard - Backup${NC}"
+echo -e "${BLUE}MDU Performance Dashboard - Backup${NC}"
 echo -e "${BLUE}========================================${NC}"
 echo ""
 

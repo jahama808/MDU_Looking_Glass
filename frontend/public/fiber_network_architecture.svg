@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 350">
+  <!-- Define styles -->
+  <defs>
+    <style>
+      .device-box { fill: #e3f2fd; stroke: #1976d2; stroke-width: 2; cursor: pointer; transition: all 0.3s; }
+      .device-box:hover { fill: #bbdefb; stroke: #0d47a1; stroke-width: 3; filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3)); }
+      .device-text { font-family: Arial, sans-serif; font-size: 16px; fill: #1565c0; font-weight: bold; pointer-events: none; }
+      .device-label { font-family: Arial, sans-serif; font-size: 12px; fill: #424242; pointer-events: none; }
+      .connection { stroke: #f57c00; stroke-width: 3; fill: none; }
+      .fiber-connection { stroke: #4caf50; stroke-width: 3; fill: none; stroke-dasharray: 5,5; }
+      .connection-label { font-family: Arial, sans-serif; font-size: 11px; fill: #666; }
+      .group-box { fill: none; stroke: #9e9e9e; stroke-width: 2; stroke-dasharray: 8,4; }
+      .group-label { font-family: Arial, sans-serif; font-size: 18px; fill: #424242; font-weight: bold; }
+      .device { cursor: pointer; }
+    </style>
+  </defs>
+
+  <!-- Central Office grouping box -->
+  <rect x="20" y="60" width="490" height="180" rx="10" class="group-box"/>
+  <text x="40" y="50" class="group-label">Central Office</text>
+
+  <!-- Property grouping box -->
+  <rect x="590" y="60" width="380" height="180" rx="10" class="group-box"/>
+  <text x="610" y="50" class="group-label">Property</text>
+
+  <!-- Nokia 7x50 Router -->
+  <g class="device" data-tooltip="Nokia 7x50 Router: HT's core network router that connects to several OLTs, providing internet connectivity">
+    <title>Nokia 7x50 Router: HT's core network router that connects to several OLTs, providing internet connectivity</title>
+    <rect x="50" y="100" width="150" height="100" rx="5" class="device-box"/>
+    <text x="125" y="140" text-anchor="middle" class="device-text">Nokia 7x50</text>
+    <text x="125" y="158" text-anchor="middle" class="device-text">Router</text>
+    <circle cx="125" cy="175" r="3" fill="#1976d2" style="pointer-events: none;"/>
+    <circle cx="125" cy="185" r="3" fill="#1976d2" style="pointer-events: none;"/>
+  </g>
+
+  <!-- Connection line from Router to OLT -->
+  <line x1="200" y1="150" x2="300" y2="150" class="fiber-connection"/>
+  <text x="250" y="140" text-anchor="middle" class="connection-label">Fiber Optic</text>
+
+  <!-- GPON/XGSPON OLT -->
+  <g class="device" data-tooltip="OLT (Optical Line Terminal): HT's primary fiber technology used to provide Gigabit and Multi-Gigabit fioptics service to end customers">
+    <title>OLT (Optical Line Terminal): HT's primary fiber technology used to provide Gigabit and Multi-Gigabit fioptics service to end customers</title>
+    <rect x="300" y="100" width="180" height="100" rx="5" class="device-box"/>
+    <text x="390" y="140" text-anchor="middle" class="device-text">GPON/XGSPON</text>
+    <text x="390" y="160" text-anchor="middle" class="device-text">OLT</text>
+    <text x="390" y="180" text-anchor="middle" class="device-label">(Optical Line Terminal)</text>
+  </g>
+
+  <!-- Fiber connection from OLT to ONT -->
+  <line x1="480" y1="150" x2="590" y2="150" class="fiber-connection"/>
+  <text x="535" y="140" text-anchor="middle" class="connection-label">Fiber Optic</text>
+
+  <!-- ONT -->
+  <g class="device" data-tooltip="ONT (Optical Network Terminal): Converts optical signal from OLT into Ethernet">
+    <title>ONT (Optical Network Terminal): Converts optical signal from OLT into Ethernet</title>
+    <rect x="620" y="100" width="150" height="100" rx="5" class="device-box"/>
+    <text x="695" y="145" text-anchor="middle" class="device-text">ONT</text>
+    <text x="695" y="165" text-anchor="middle" class="device-label">(Optical Network</text>
+    <text x="695" y="180" text-anchor="middle" class="device-label">Terminal)</text>
+  </g>
+
+  <!-- Ethernet connection from ONT to eero -->
+  <line x1="770" y1="150" x2="820" y2="150" class="connection"/>
+  <text x="795" y="140" text-anchor="middle" class="connection-label">Ethernet</text>
+
+  <!-- eero -->
+  <g class="device" data-tooltip="eero: HT's premiere wireless gateway supporting WiFi 6 and WiFi 7. Customer can also use their own equipment in place of the eero">
+    <title>eero: HT's premiere wireless gateway supporting WiFi 6 and WiFi 7. Customer can also use their own equipment in place of the eero</title>
+    <rect x="820" y="100" width="120" height="100" rx="5" class="device-box"/>
+    <text x="880" y="155" text-anchor="middle" class="device-text">eero</text>
+  </g>
+
+  <!-- Arrows -->
+  <polygon points="300,150 290,145 290,155" fill="#4caf50"/>
+  <polygon points="590,150 580,145 580,155" fill="#4caf50"/>
+  <polygon points="820,150 810,145 810,155" fill="#f57c00"/>
+</svg>

@@ -1,5 +1,5 @@
 [Unit]
-Description=Run Property Outage Dashboard auto-processing every 6 hours
+Description=Run MDU Performance Dashboard auto-processing every 6 hours
 Requires=outage-auto-process.service
 
 [Timer]

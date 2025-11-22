@@ -1,6 +1,6 @@
 # Updating the Database with New Data
 
-This guide explains how to update the Property Outage Dashboard with new data files.
+This guide explains how to update the MDU Performance Dashboard with new data files.
 
 ## Recommended: Automated Processing
 
@@ -195,7 +195,7 @@ cp output/outages.db data/archive/$(date +%Y-%m-%d)/outages.db
 
 ## Automated Updates (Recommended)
 
-The Property Outage Dashboard includes automated processing that monitors the `inputs/` directory for new data files and processes them automatically.
+The MDU Performance Dashboard includes automated processing that monitors the `inputs/` directory for new data files and processes them automatically.
 
 ### How Automated Processing Works
 

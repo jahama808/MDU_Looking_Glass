@@ -1,9 +1,9 @@
 @echo off
-REM Property Outage Dashboard - Installation Script (Windows)
+REM MDU Performance Dashboard - Installation Script (Windows)
 REM This script sets up the entire application environment
 
 echo ========================================
-echo Property Outage Dashboard - Installer
+echo MDU Performance Dashboard - Installer
 echo ========================================
 echo.
 
@@ -122,7 +122,7 @@ echo ✓ Created start-frontend.bat
 
 REM Create start-all.bat
 echo @echo off > start-all.bat
-echo echo Starting Property Outage Dashboard... >> start-all.bat
+echo echo Starting MDU Performance Dashboard... >> start-all.bat
 echo echo. >> start-all.bat
 echo echo Starting API server on port 5000... >> start-all.bat
 echo start "API Server" cmd /k "call venv\Scripts\activate.bat && python api_server.py" >> start-all.bat
@@ -131,7 +131,7 @@ echo echo Starting frontend dev server on port 5173... >> start-all.bat
 echo start "Frontend Dev Server" cmd /k "cd frontend && npm run dev" >> start-all.bat
 echo echo. >> start-all.bat
 echo echo ======================================== >> start-all.bat
-echo echo Property Outage Dashboard is starting! >> start-all.bat
+echo echo MDU Performance Dashboard is starting! >> start-all.bat
 echo echo ======================================== >> start-all.bat
 echo echo. >> start-all.bat
 echo echo Frontend: http://localhost:5173 >> start-all.bat

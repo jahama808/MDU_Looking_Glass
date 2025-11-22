@@ -13,6 +13,14 @@
   margin: 0;
 }
 
+/* Top Stats Row - Network Health and Outage Statistics */
+.top-stats-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
 /* Dashboard Grid Layout */
 .dashboard-grid {
   display: grid;
@@ -69,6 +77,34 @@
   align-items: center;
 }
 
+.island-filter {
+  background: #1c2128;
+  color: #e0e0e0;
+  border: 1px solid #3d444d;
+  border-radius: 4px;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s;
+}
+
+.island-filter:hover {
+  border-color: #5dade2;
+  background: #22272e;
+}
+
+.island-filter:focus {
+  border-color: #5dade2;
+  box-shadow: 0 0 0 2px rgba(93, 173, 226, 0.2);
+}
+
+.island-filter option {
+  background: #1c2128;
+  color: #e0e0e0;
+  padding: 0.5rem;
+}
+
 .widget-link {
   color: #5dade2;
   font-size: 0.85rem;
@@ -106,6 +142,76 @@
   border-radius: 4px;
   font-size: 0.75rem;
   font-weight: 500;
+}
+
+.update-schedule {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #8b92a6;
+  font-size: 0.8rem;
+  font-weight: 500;
+  background: #1c2128;
+  padding: 0.35rem 0.7rem;
+  border-radius: 4px;
+  border: 1px solid #3d444d;
+}
+
+.clock-icon {
+  width: 14px;
+  height: 14px;
+  color: #5dade2;
+}
+
+.live-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #51cf66;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.live-indicator-red {
+  color: #ff6b6b;
+}
+
+.live-dot {
+  width: 8px;
+  height: 8px;
+  background: #51cf66;
+  border-radius: 50%;
+  animation: pulse-glow 2s ease-in-out infinite;
+  box-shadow: 0 0 4px #51cf66;
+}
+
+.live-dot-red {
+  background: #ff6b6b;
+  animation: pulse-glow-red 2s ease-in-out infinite;
+  box-shadow: 0 0 4px #ff6b6b;
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 4px #51cf66, 0 0 8px #51cf66;
+  }
+  50% {
+    opacity: 0.6;
+    box-shadow: 0 0 2px #51cf66, 0 0 4px #51cf66;
+  }
+}
+
+@keyframes pulse-glow-red {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 6px #ff6b6b, 0 0 12px #ff6b6b, 0 0 18px rgba(255, 107, 107, 0.5);
+  }
+  50% {
+    opacity: 0.7;
+    box-shadow: 0 0 4px #ff6b6b, 0 0 8px #ff6b6b, 0 0 12px rgba(255, 107, 107, 0.3);
+  }
 }
 
 .widget-content {
@@ -510,6 +616,10 @@
 
 /* Responsive Layout */
 @media (max-width: 1024px) {
+  .top-stats-row {
+    grid-template-columns: 1fr;
+  }
+
   .dashboard-grid {
     grid-template-columns: 1fr;
   }

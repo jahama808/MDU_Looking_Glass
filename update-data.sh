@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "Property Outage Dashboard - Data Update"
+echo "MDU Performance Dashboard - Data Update"
 echo "========================================"
 echo ""
 

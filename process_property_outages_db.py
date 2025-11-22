@@ -105,6 +105,8 @@ def create_database_schema(conn):
             gateway_speed_down REAL,
             gateway_speed_up REAL,
             speed_test_date TEXT,
+            equip_name TEXT,
+            router_7x50 TEXT,
             country_code TEXT,
             country_name TEXT,
             city TEXT,
@@ -731,7 +733,7 @@ def process_outages_to_db(outages_file, discovery_file, database_path, mode='app
                 total_outages_processed += len(property_outages)
 
             # Insert networks
-            network_info = property_networks[['Eero Network ID', 'Street Address', 'Subloc', 'Customer Name', 'Service Config Name', 'Gateway Speed Down', 'Gateway Speed Up', 'Gateway Speed Date']].drop_duplicates()
+            network_info = property_networks[['Eero Network ID', 'Street Address', 'Subloc', 'Customer Name', 'Service Config Name', 'Gateway Speed Down', 'Gateway Speed Up', 'Gateway Speed Date', 'Equip Name', '7x50']].drop_duplicates()
 
             for _, network_row in network_info.iterrows():
                 network_id = int(network_row['Eero Network ID'])
@@ -758,12 +760,24 @@ def process_outages_to_db(outages_file, discovery_file, database_path, mode='app
                 else:
                     speed_test_date = None
 
+                # Get equip_name and remove "ONT-" prefix
+                equip_name_raw = network_row.get('Equip Name')
+                equip_name = None
+                if equip_name_raw and isinstance(equip_name_raw, str):
+                    equip_name = equip_name_raw.replace('ONT-', '', 1) if equip_name_raw.startswith('ONT-') else equip_name_raw
+
+                # Get 7x50 router name
+                router_7x50_raw = network_row.get('7x50')
+                router_7x50 = None
+                if router_7x50_raw and isinstance(router_7x50_raw, str) and router_7x50_raw.strip():
+                    router_7x50 = router_7x50_raw.strip()
+
                 cursor.execute("""
                     INSERT INTO networks
                     (network_id, property_id, street_address, subloc, customer_name, total_outages,
-                     download_target, upload_target, gateway_speed_down, gateway_speed_up, speed_test_date,
+                     download_target, upload_target, gateway_speed_down, gateway_speed_up, speed_test_date, equip_name, router_7x50,
                      country_code, country_name, city, region, latitude, longitude, timezone, postal_code, region_name)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(network_id) DO UPDATE SET
                         total_outages = total_outages + excluded.total_outages,
                         street_address = excluded.street_address,
@@ -774,6 +788,8 @@ def process_outages_to_db(outages_file, discovery_file, database_path, mode='app
                         gateway_speed_down = excluded.gateway_speed_down,
                         gateway_speed_up = excluded.gateway_speed_up,
                         speed_test_date = excluded.speed_test_date,
+                        equip_name = excluded.equip_name,
+                        router_7x50 = excluded.router_7x50,
                         country_code = excluded.country_code,
                         country_name = excluded.country_name,
                         city = excluded.city,
@@ -795,6 +811,8 @@ def process_outages_to_db(outages_file, discovery_file, database_path, mode='app
                     gateway_speed_down,
                     gateway_speed_up,
                     speed_test_date,
+                    equip_name,
+                    router_7x50,
                     location_data.get('country_code') if location_data is not None else None,
                     location_data.get('country_name') if location_data is not None else None,
                     city,  # Use city from discovery file
@@ -803,7 +821,6 @@ def process_outages_to_db(outages_file, discovery_file, database_path, mode='app
                     longitude,
                     location_data.get('timezone') if location_data is not None else None,
                     postal_code,  # Use postal_code from discovery file
-
                     location_data.get('region_name') if location_data is not None else None
                 ))
 

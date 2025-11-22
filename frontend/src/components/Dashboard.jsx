@@ -13,6 +13,7 @@ function Dashboard() {
   const [analysisLoading, setAnalysisLoading] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [selectedIsland, setSelectedIsland] = useState('all')
 
   useEffect(() => {
     fetchData()
@@ -75,6 +76,42 @@ function Dashboard() {
     }
   }
 
+  // Calculate next scheduled data update time (every 6 hours: 00:00, 06:00, 12:00, 18:00)
+  const getNextUpdateTime = () => {
+    const now = new Date()
+    const currentHour = now.getHours()
+
+    // Scheduled processing times (every 6 hours)
+    const scheduledHours = [0, 6, 12, 18]
+
+    // Find the next scheduled hour
+    let nextHour = scheduledHours.find(hour => hour > currentHour)
+
+    // If no scheduled hour found today, use the first one tomorrow
+    if (nextHour === undefined) {
+      nextHour = scheduledHours[0]
+    }
+
+    // Create the next update time
+    const nextUpdate = new Date(now)
+    if (nextHour < currentHour) {
+      // Next update is tomorrow
+      nextUpdate.setDate(now.getDate() + 1)
+    }
+    nextUpdate.setHours(nextHour, 0, 0, 0)
+
+    const minutesUntil = Math.ceil((nextUpdate - now) / (1000 * 60))
+    const hoursUntil = Math.floor(minutesUntil / 60)
+
+    if (hoursUntil < 1) {
+      return `${minutesUntil} min`
+    } else if (hoursUntil < 6) {
+      return `${hoursUntil}h ${minutesUntil % 60}m`
+    } else {
+      return nextUpdate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+    }
+  }
+
   if (loading) {
     return <div className="loading">Loading statistics...</div>
   }
@@ -89,6 +126,170 @@ function Dashboard() {
         <h1>Network Monitoring Summary</h1>
       </div>
 
+      {/* Top Stats Row - Network Health and Outage Statistics */}
+      <div className="top-stats-row">
+        {/* Network Health Overview Widget */}
+        <div className="widget">
+          <div className="widget-header">
+            <h2>Network Health Overview</h2>
+            <div className="widget-actions">
+              <span className="live-indicator">
+                <span className="live-dot"></span>
+                LIVE
+              </span>
+            </div>
+          </div>
+          <div className="widget-content">
+            <div className="health-summary">
+              <div className="health-chart">
+                <div className="donut-chart">
+                  <svg viewBox="0 0 100 100" className="donut">
+                    {/* Background circle */}
+                    <circle cx="50" cy="50" r="40" fill="none" stroke="#2d333b" strokeWidth="20"/>
+                    {/* Green portion (Up networks) */}
+                    <circle
+                      cx="50"
+                      cy="50"
+                      r="40"
+                      fill="none"
+                      stroke="#51cf66"
+                      strokeWidth="20"
+                      strokeDasharray={`${(stats.total_networks - ongoingCount) / stats.total_networks * 251.2} 251.2`}
+                      transform="rotate(-90 50 50)"
+                    />
+                    {/* Red portion (Down networks) */}
+                    <circle
+                      cx="50"
+                      cy="50"
+                      r="40"
+                      fill="none"
+                      stroke="#ff6b6b"
+                      strokeWidth="20"
+                      strokeDasharray={`${ongoingCount / stats.total_networks * 251.2} 251.2`}
+                      strokeDashoffset={`-${(stats.total_networks - ongoingCount) / stats.total_networks * 251.2}`}
+                      transform="rotate(-90 50 50)"
+                    />
+                  </svg>
+                  <div className="donut-center">
+                    <div className="donut-value">{stats.total_networks}</div>
+                    <div className="donut-label">Total</div>
+                  </div>
+                </div>
+              </div>
+              <div className="health-stats">
+                <div className="health-stat">
+                  <span className="stat-indicator up"></span>
+                  <span className="stat-number">{stats.total_networks - ongoingCount}</span>
+                  <span className="stat-label">Up</span>
+                </div>
+                <div className="health-stat">
+                  <span className="stat-indicator down"></span>
+                  <span className="stat-number">{ongoingCount}</span>
+                  <span className="stat-label">Down</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Outage Statistics Widget */}
+        <div className="widget">
+          <div className="widget-header">
+            <h2>Outage Statistics</h2>
+            <div className="widget-actions">
+              <span className="live-indicator">
+                <span className="live-dot"></span>
+                LIVE
+              </span>
+            </div>
+          </div>
+          <div className="widget-content">
+            <table className="stats-table">
+              <tbody>
+                <tr>
+                  <td className="stat-label">Properties with Outages</td>
+                  <td className="stat-value">{new Set(ongoingOutages.map(o => o.property_id)).size}</td>
+                </tr>
+                <tr>
+                  <td className="stat-label">Total Networks Out of Service</td>
+                  <td className="stat-value critical">{ongoingCount}</td>
+                </tr>
+                <tr>
+                  <td className="stat-label">Total Networks</td>
+                  <td className="stat-value">{stats.total_networks}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {/* Property-Wide Outages Alert - Full Width */}
+      {propertyWideOutages && propertyWideOutages.has_property_wide_outages && (
+        <div className="widget widget-alert widget-full-width">
+          <div className="widget-header">
+            <h2>⚠️ Property-Wide Outages Detected</h2>
+            <div className="widget-actions">
+              <span className="alert-badge">{propertyWideOutages.count}</span>
+            </div>
+          </div>
+          <div className="widget-content">
+            <div className="property-list">
+              {propertyWideOutages.properties.map((property) => (
+                <Link
+                  key={property.property_id}
+                  to={`/property/${property.property_id}`}
+                  className="property-row"
+                >
+                  <span className="status-dot critical"></span>
+                  <div className="property-info">
+                    <div className="property-name">{property.property_name}</div>
+                    <div className="property-detail">
+                      {property.networks_with_outages} / {property.total_networks} networks affected ({property.outage_percentage}%) • {new Date(property.outage_hour).toLocaleString()}
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AI Root Cause Analysis - Full Width */}
+      {propertyWideOutages && propertyWideOutages.has_property_wide_outages && (
+        <div className="widget widget-full-width">
+          <div className="widget-header">
+            <h2>🤖 AI Root Cause Analysis</h2>
+            {analysis && analysis.model && (
+              <div className="widget-actions">
+                <span className="model-badge">{analysis.model}</span>
+              </div>
+            )}
+          </div>
+          <div className="widget-content">
+            {analysisLoading && (
+              <div className="analysis-loading">
+                <div className="spinner"></div>
+                <p>Analyzing outage patterns...</p>
+              </div>
+            )}
+            {!analysisLoading && analysis && (
+              <div className="analysis-content">
+                {analysis.error ? (
+                  <div className="analysis-error">⚠️ {analysis.analysis}</div>
+                ) : (
+                  <div className="analysis-text">
+                    {analysis.analysis.split('\n').map((line, idx) => (
+                      <p key={idx}>{line}</p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Top Property Widget - Full Width */}
       {stats.top_property && (
         <div
@@ -98,6 +299,15 @@ function Dashboard() {
         >
           <div className="widget-header">
             <h2>Most Affected Property (Past 24 Hours)</h2>
+            <div className="widget-actions">
+              <span className="update-schedule">
+                <svg className="clock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>
+                Next update: {getNextUpdateTime()}
+              </span>
+            </div>
           </div>
           <div className="widget-content">
             <div className="top-property-info">
@@ -115,209 +325,95 @@ function Dashboard() {
           <div className="widget-header">
             <h2>🔴 Currently Down Networks</h2>
             <div className="widget-actions">
-              <span className="alert-badge-warning">{ongoingCount}</span>
+              <span className="live-indicator live-indicator-red">
+                <span className="live-dot live-dot-red"></span>
+                LIVE
+              </span>
+              <select
+                className="island-filter"
+                value={selectedIsland}
+                onChange={(e) => setSelectedIsland(e.target.value)}
+              >
+                <option value="all">All Islands</option>
+                {[...new Set(ongoingOutages.map(o => o.island))].sort().map(island => (
+                  <option key={island} value={island}>{island}</option>
+                ))}
+              </select>
+              <span className="alert-badge-warning">
+                {selectedIsland === 'all'
+                  ? ongoingCount
+                  : ongoingOutages.filter(o => o.island === selectedIsland).length}
+              </span>
             </div>
           </div>
           <div className="widget-content">
             <div className="ongoing-outages-list two-column">
-              {[...ongoingOutages].sort((a, b) => {
-                // Sort alphabetically by property name
-                const nameA = (a.property_name || '').toLowerCase()
-                const nameB = (b.property_name || '').toLowerCase()
-                return nameA.localeCompare(nameB)
-              }).map((outage) => {
-                const startTime = new Date(outage.wan_down_start)
-                const duration = Math.floor((new Date() - startTime) / (1000 * 60 * 60)) // hours
+              {(() => {
+                // Filter outages by selected island
+                const filteredOutages = selectedIsland === 'all'
+                  ? ongoingOutages
+                  : ongoingOutages.filter(o => o.island === selectedIsland)
 
-                return (
-                  <Link
-                    key={outage.ongoing_outage_id}
-                    to={`/network/${outage.network_id}`}
-                    className="ongoing-outage-row"
-                  >
-                    <span className="status-dot ongoing"></span>
-                    <div className="outage-info">
-                      <div className="outage-property">{outage.property_name}</div>
-                      <div className="outage-detail">
-                        Network {Math.floor(outage.network_id)} • {outage.street_address} {outage.subloc || ''}
+                // Group outages by property
+                const groupedByProperty = filteredOutages.reduce((acc, outage) => {
+                  const key = outage.property_id
+                  if (!acc[key]) {
+                    acc[key] = {
+                      property_id: outage.property_id,
+                      property_name: outage.property_name,
+                      island: outage.island,
+                      networks: []
+                    }
+                  }
+                  acc[key].networks.push(outage)
+                  return acc
+                }, {})
+
+                // Convert to array and sort by count (descending), then by name
+                const propertyGroups = Object.values(groupedByProperty).sort((a, b) => {
+                  if (b.networks.length !== a.networks.length) {
+                    return b.networks.length - a.networks.length
+                  }
+                  return a.property_name.localeCompare(b.property_name)
+                })
+
+                return propertyGroups.map((property) => {
+                  // Calculate total duration (hours down across all networks)
+                  const totalHours = property.networks.reduce((sum, outage) => {
+                    const startTime = new Date(outage.wan_down_start)
+                    const duration = Math.floor((new Date() - startTime) / (1000 * 60 * 60))
+                    return sum + duration
+                  }, 0)
+                  const avgDuration = Math.floor(totalHours / property.networks.length)
+
+                  return (
+                    <Link
+                      key={property.property_id}
+                      to={`/property/${property.property_id}`}
+                      className="ongoing-outage-row"
+                    >
+                      <span className="status-dot ongoing"></span>
+                      <div className="outage-info">
+                        <div className="outage-property">{property.property_name}</div>
+                        <div className="outage-detail">
+                          {property.island} • {property.networks.length} network{property.networks.length !== 1 ? 's' : ''} down
+                        </div>
+                        <div className="outage-duration">
+                          Avg. {avgDuration}h down
+                        </div>
                       </div>
-                      <div className="outage-duration">
-                        Down for {duration}h • {outage.reason || 'Unknown reason'}
-                      </div>
-                    </div>
-                  </Link>
-                )
-              })}
+                    </Link>
+                  )
+                })
+              })()}
             </div>
           </div>
         </div>
       )}
 
       <div className="dashboard-grid">
-        {/* Left Column */}
+        {/* Single Column for Remaining Widgets */}
         <div className="dashboard-column">
-          {/* Network Health Overview Widget */}
-          <div className="widget">
-            <div className="widget-header">
-              <h2>Network Health Overview</h2>
-              <div className="widget-actions">
-                <Link to="/properties" className="widget-link">View All</Link>
-              </div>
-            </div>
-            <div className="widget-content">
-              <div className="health-summary">
-                <div className="health-chart">
-                  <div className="donut-chart">
-                    <svg viewBox="0 0 100 100" className="donut">
-                      {/* Background circle */}
-                      <circle cx="50" cy="50" r="40" fill="none" stroke="#2d333b" strokeWidth="20"/>
-                      {/* Green portion (Up networks) */}
-                      <circle
-                        cx="50"
-                        cy="50"
-                        r="40"
-                        fill="none"
-                        stroke="#51cf66"
-                        strokeWidth="20"
-                        strokeDasharray={`${(stats.total_networks - stats.networks_with_outages) / stats.total_networks * 251.2} 251.2`}
-                        transform="rotate(-90 50 50)"
-                      />
-                      {/* Red portion (Down networks) */}
-                      <circle
-                        cx="50"
-                        cy="50"
-                        r="40"
-                        fill="none"
-                        stroke="#ff6b6b"
-                        strokeWidth="20"
-                        strokeDasharray={`${stats.networks_with_outages / stats.total_networks * 251.2} 251.2`}
-                        strokeDashoffset={`-${(stats.total_networks - stats.networks_with_outages) / stats.total_networks * 251.2}`}
-                        transform="rotate(-90 50 50)"
-                      />
-                    </svg>
-                    <div className="donut-center">
-                      <div className="donut-value">{stats.total_networks}</div>
-                      <div className="donut-label">Total</div>
-                    </div>
-                  </div>
-                </div>
-                <div className="health-stats">
-                  <div className="health-stat">
-                    <span className="stat-indicator up"></span>
-                    <span className="stat-number">{stats.total_networks - stats.networks_with_outages}</span>
-                    <span className="stat-label">Up</span>
-                  </div>
-                  <div className="health-stat">
-                    <span className="stat-indicator down"></span>
-                    <span className="stat-number">{stats.networks_with_outages}</span>
-                    <span className="stat-label">Down</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Properties with Outages Widget */}
-          {propertyWideOutages && propertyWideOutages.has_property_wide_outages && (
-            <div className="widget widget-alert">
-              <div className="widget-header">
-                <h2>⚠️ Property-Wide Outages</h2>
-                <div className="widget-actions">
-                  <span className="alert-badge">{propertyWideOutages.count}</span>
-                </div>
-              </div>
-              <div className="widget-content">
-                <div className="property-list">
-                  {propertyWideOutages.properties.map((property) => (
-                    <Link
-                      key={property.property_id}
-                      to={`/property/${property.property_id}`}
-                      className="property-row"
-                    >
-                      <span className="status-dot critical"></span>
-                      <div className="property-info">
-                        <div className="property-name">{property.property_name}</div>
-                        <div className="property-detail">
-                          {property.networks_with_outages} / {property.total_networks} networks • {new Date(property.outage_hour).toLocaleString()}
-                        </div>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* AI Analysis Widget */}
-          {propertyWideOutages && propertyWideOutages.has_property_wide_outages && (
-            <div className="widget">
-              <div className="widget-header">
-                <h2>🤖 AI Root Cause Analysis</h2>
-                {analysis && analysis.model && (
-                  <div className="widget-actions">
-                    <span className="model-badge">{analysis.model}</span>
-                  </div>
-                )}
-              </div>
-              <div className="widget-content">
-                {analysisLoading && (
-                  <div className="analysis-loading">
-                    <div className="spinner"></div>
-                    <p>Analyzing outage patterns...</p>
-                  </div>
-                )}
-                {!analysisLoading && analysis && (
-                  <div className="analysis-content">
-                    {analysis.error ? (
-                      <div className="analysis-error">⚠️ {analysis.analysis}</div>
-                    ) : (
-                      <div className="analysis-text">
-                        {analysis.analysis.split('\n').map((line, idx) => (
-                          <p key={idx}>{line}</p>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Right Column */}
-        <div className="dashboard-column">
-          {/* Statistics Summary Widget */}
-          <div className="widget">
-            <div className="widget-header">
-              <h2>Outage Statistics</h2>
-              <div className="widget-actions">
-                <span className="widget-link">Last 24h</span>
-              </div>
-            </div>
-            <div className="widget-content">
-              <table className="stats-table">
-                <tbody>
-                  <tr>
-                    <td className="stat-label">Properties with Outages</td>
-                    <td className="stat-value">{stats.properties_with_outages}</td>
-                  </tr>
-                  <tr>
-                    <td className="stat-label">Total Outages</td>
-                    <td className="stat-value critical">{stats.total_outages}</td>
-                  </tr>
-                  <tr>
-                    <td className="stat-label">Total Networks</td>
-                    <td className="stat-value">{stats.total_networks}</td>
-                  </tr>
-                  <tr>
-                    <td className="stat-label">Networks with Outages</td>
-                    <td className="stat-value warning">{stats.networks_with_outages}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-
           {/* Outage Reasons Widget */}
           {stats.outage_reasons && Object.keys(stats.outage_reasons).length > 0 && (() => {
             const reasons = Object.keys(stats.outage_reasons);

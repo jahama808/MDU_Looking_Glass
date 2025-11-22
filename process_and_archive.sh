@@ -10,7 +10,7 @@ set -e  # Exit on error
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INPUTS_DIR="${SCRIPT_DIR}/inputs"
 ARCHIVE_DIR="${SCRIPT_DIR}/inputs_already_read"
-DATABASE="${SCRIPT_DIR}/output/outages.db"
+DATABASE="${SCRIPT_DIR}/property_outages.db"
 PROCESSING_SCRIPT="${SCRIPT_DIR}/process_property_outages_db.py"
 
 # Check if virtual environment is activated

@@ -44,6 +44,62 @@
   background: #22272e;
 }
 
+/* Topology Map Section */
+.topology-map-section {
+  background: #2d333b;
+  border: 1px solid #3d444d;
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 1.5rem;
+}
+
+.topology-header {
+  background: #22272e;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #3d444d;
+}
+
+.topology-header h2 {
+  color: #e0e0e0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.topology-content {
+  padding: 1.5rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: #1c2128;
+}
+
+.topology-diagram {
+  max-width: 100%;
+  width: 100%;
+  height: auto;
+  min-height: 350px;
+  border-radius: 4px;
+  display: block;
+  border: none;
+}
+
+.topology-tooltip {
+  position: absolute;
+  background: rgba(26, 31, 46, 0.95);
+  color: #e0e0e0;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  max-width: 300px;
+  border: 1px solid #5dade2;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+  z-index: 1000;
+  white-space: normal;
+}
+
 /* Search Section */
 .search-section {
   margin-bottom: 1.5rem;
@@ -177,4 +233,26 @@
   background: #2d1f1f;
   border: 1px solid #ff6b6b;
   border-radius: 6px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .equipment-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .topology-content {
+    padding: 1rem;
+  }
+
+  .topology-diagram {
+    max-width: 100%;
+    min-height: 250px;
+  }
+
+  .topology-tooltip {
+    max-width: 200px;
+    font-size: 0.75rem;
+    padding: 0.5rem 0.75rem;
+  }
 }

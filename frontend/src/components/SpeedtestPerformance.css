@@ -8,15 +8,34 @@
 
 .speedtest-header h1 {
   color: #e0e0e0;
-  margin: 0 0 0.5rem 0;
+  margin: 0 0 1rem 0;
   font-size: 1.5rem;
   font-weight: 600;
 }
 
-.speedtest-header .subtitle {
-  color: #8b92a6;
-  font-size: 0.95rem;
+.info-box {
+  background: linear-gradient(135deg, #2d4a7c 0%, #1e3a5f 100%);
+  border: 1px solid #5dade2;
+  border-left: 4px solid #5dade2;
+  border-radius: 6px;
+  padding: 1rem;
   margin-bottom: 1rem;
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  box-shadow: 0 2px 8px rgba(93, 173, 226, 0.15);
+}
+
+.info-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.info-content {
+  color: #e8f4f8;
+  font-size: 0.95rem;
+  line-height: 1.5;
 }
 
 .view-toggle-container {
@@ -116,6 +135,53 @@
 
 .property-count .island-filter-label {
   color: #5dade2;
+  font-weight: 600;
+}
+
+/* Statistics Section */
+.statistics-section {
+  background: #2d333b;
+  border: 1px solid #3d444d;
+  border-radius: 6px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.statistics-section h2 {
+  color: #e0e0e0;
+  margin: 0 0 0.5rem 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.statistics-section .stats-subtitle {
+  color: #8b92a6;
+  font-size: 0.9rem;
+  margin-bottom: 1.5rem;
+}
+
+.statistics-section .stats-subtitle .island-filter-label {
+  color: #5dade2;
+  font-weight: 600;
+}
+
+.statistics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 1.5rem;
+}
+
+.stat-chart {
+  background: #22272e;
+  border: 1px solid #3d444d;
+  border-radius: 6px;
+  padding: 1rem;
+}
+
+.stat-chart h3 {
+  color: #e0e0e0;
+  margin: 0 0 1rem 0;
+  font-size: 1rem;
   font-weight: 600;
 }
 
@@ -305,5 +371,31 @@
 
   .performance-cell {
     padding: 0.5rem 0.75rem;
+  }
+
+  .statistics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .statistics-section {
+    padding: 1rem;
+  }
+
+  .stat-chart {
+    padding: 0.75rem;
+  }
+
+  .info-box {
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 0.75rem;
+  }
+
+  .info-icon {
+    font-size: 1.25rem;
+  }
+
+  .info-content {
+    font-size: 0.9rem;
   }
 }

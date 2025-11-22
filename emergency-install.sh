@@ -2,7 +2,7 @@
 
 #############################################################################
 # EMERGENCY DEPLOYMENT SCRIPT FOR UBUNTU
-# Property Outage Dashboard - Complete System Installation
+# MDU Performance Dashboard - Complete System Installation
 #
 # This script performs a complete installation and setup on a fresh Ubuntu
 # server. Use this for disaster recovery or new server deployment.
@@ -186,7 +186,7 @@ setup_systemd_services() {
     log_info "Creating API service..."
     cat > /etc/systemd/system/outage-dashboard-api.service <<EOF
 [Unit]
-Description=Property Outage Dashboard - API Server
+Description=MDU Performance Dashboard - API Server
 After=network.target
 
 [Service]
@@ -206,7 +206,7 @@ EOF
     log_info "Creating frontend service..."
     cat > /etc/systemd/system/outage-dashboard-frontend.service <<EOF
 [Unit]
-Description=Property Outage Dashboard - Frontend Server
+Description=MDU Performance Dashboard - Frontend Server
 After=network.target
 
 [Service]
@@ -225,7 +225,7 @@ EOF
     log_info "Setting up auto-processing timer..."
     cat > /etc/systemd/system/outage-auto-process.service <<EOF
 [Unit]
-Description=Property Outage Dashboard - Automated Data Processing
+Description=MDU Performance Dashboard - Automated Data Processing
 After=network.target
 
 [Service]
@@ -361,7 +361,7 @@ print_summary() {
     # Get server IP
     SERVER_IP=$(hostname -I | awk '{print $1}')
 
-    echo -e "${GREEN}✓ Property Outage Dashboard is now running!${NC}"
+    echo -e "${GREEN}✓ MDU Performance Dashboard is now running!${NC}"
     echo ""
     echo "Access the dashboard:"
     echo -e "  ${BLUE}http://$SERVER_IP${NC}"
@@ -396,7 +396,7 @@ print_summary() {
 #############################################################################
 
 main() {
-    print_header "EMERGENCY DEPLOYMENT - Property Outage Dashboard"
+    print_header "EMERGENCY DEPLOYMENT - MDU Performance Dashboard"
 
     log_info "Starting emergency installation on Ubuntu..."
     log_info "Install directory: $INSTALL_DIR"

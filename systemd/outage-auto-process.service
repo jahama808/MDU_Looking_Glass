@@ -1,5 +1,5 @@
 [Unit]
-Description=Property Outage Dashboard - Automated Data Processing
+Description=MDU Performance Dashboard - Automated Data Processing
 After=network.target
 
 [Service]

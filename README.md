@@ -1,4 +1,4 @@
-# Property Outage Dashboard
+# MDU Performance Dashboard
 
 A comprehensive web-based dashboard for monitoring and analyzing property outages across MDU (Multi-Dwelling Unit) networks. This application tracks outages by property, network, xPON shelf, and 7x50 router equipment, providing real-time alerts for property-wide outages.
 

@@ -11,7 +11,7 @@ if (-not $isAdmin) {
     exit 1
 }
 
-Write-Host "Property Outage Dashboard - Scheduled Task Installation" -ForegroundColor Cyan
+Write-Host "MDU Performance Dashboard - Scheduled Task Installation" -ForegroundColor Cyan
 Write-Host "========================================================" -ForegroundColor Cyan
 Write-Host ""
 

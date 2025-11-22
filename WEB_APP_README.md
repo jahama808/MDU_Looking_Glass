@@ -175,4 +175,4 @@ If port 5000 or 5173 is already in use:
 
 ## License
 
-This project is part of the Property Outage Monitoring System.
+Koko Crater Labs.

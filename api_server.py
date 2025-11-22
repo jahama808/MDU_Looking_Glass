@@ -15,6 +15,8 @@ API will be available at http://localhost:5000
 
 from flask import Flask, jsonify, request, session
 from flask_cors import CORS
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from functools import wraps
 import sqlite3
 import os
@@ -25,6 +27,7 @@ import hashlib
 import json
 import bcrypt
 import secrets
+import re
 
 
 # Check if running in virtual environment
@@ -49,7 +52,21 @@ app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=24)
 
-CORS(app, supports_credentials=True)  # Enable CORS with credentials for session cookies
+# Allowed origins for CORS
+# Temporarily allowing all origins - TODO: restrict after identifying actual origin
+CORS(app,
+     resources={r"/api/*": {"origins": "*"}},
+     supports_credentials=True,
+     allow_headers=["Content-Type", "Authorization"],
+     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+
+# Initialize rate limiter
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=["200 per day", "50 per hour"],
+    storage_uri="memory://"
+)
 
 # Database configuration
 DATABASE = os.environ.get('OUTAGES_DB', 'property_outages.db')
@@ -176,6 +193,34 @@ def require_auth(f):
     return decorated_function
 
 
+def require_admin(f):
+    """Decorator to require admin authentication for a route."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # Get token from Authorization header or session
+        auth_header = request.headers.get('Authorization')
+        session_token = None
+
+        if auth_header and auth_header.startswith('Bearer '):
+            session_token = auth_header.split(' ')[1]
+        elif 'session_token' in session:
+            session_token = session['session_token']
+
+        user = validate_session_token(session_token)
+
+        if not user:
+            return jsonify({'error': 'Authentication required'}), 401
+
+        if user['role'] != 'admin':
+            return jsonify({'error': 'Admin access required'}), 403
+
+        # Add user info to request context
+        request.current_user = user
+
+        return f(*args, **kwargs)
+    return decorated_function
+
+
 @app.route('/')
 def index():
     """API documentation."""
@@ -207,6 +252,7 @@ def index():
 
 # Authentication endpoints
 @app.route('/api/auth/login', methods=['POST'])
+@limiter.limit("5 per minute")  # Max 5 login attempts per minute per IP
 def login():
     """Login with username and password."""
     data = request.get_json()
@@ -327,15 +373,15 @@ def register_user():
     username = data['username'].strip()
     email = data['email'].strip()
     password = data['password']
-    role = data.get('role', 'user')
+    role = data.get('role', 'readonly')
 
     # Validate password strength
     if len(password) < 8:
         return jsonify({'error': 'Password must be at least 8 characters'}), 400
 
     # Validate role
-    if role not in ['user', 'admin']:
-        return jsonify({'error': 'Invalid role. Must be "user" or "admin"'}), 400
+    if role not in ['readonly', 'admin']:
+        return jsonify({'error': 'Invalid role. Must be "readonly" or "admin"'}), 400
 
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -375,6 +421,217 @@ def register_user():
             'role': role
         }
     }), 201
+
+
+@app.route('/api/users', methods=['GET'])
+@require_admin
+def get_users():
+    """Get all users (admin only)."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    users = cursor.execute("""
+        SELECT user_id, username, email, role, created_at, last_login, is_active
+        FROM users
+        ORDER BY created_at DESC
+    """).fetchall()
+
+    conn.close()
+
+    return jsonify({
+        'users': [dict(user) for user in users]
+    })
+
+
+@app.route('/api/users/<int:user_id>', methods=['PUT'])
+@require_admin
+def update_user(user_id):
+    """Update user details (admin only)."""
+    data = request.get_json()
+
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Check if user exists and get their current role
+    user = cursor.execute("""
+        SELECT user_id, role FROM users WHERE user_id = ?
+    """, (user_id,)).fetchone()
+
+    if not user:
+        conn.close()
+        return jsonify({'error': 'User not found'}), 404
+
+    # Build update query dynamically based on provided fields
+    update_fields = []
+    update_values = []
+
+    if 'username' in data:
+        update_fields.append('username = ?')
+        update_values.append(data['username'].strip())
+
+    if 'email' in data:
+        update_fields.append('email = ?')
+        update_values.append(data['email'].strip())
+
+    if 'role' in data:
+        if data['role'] not in ['readonly', 'admin']:
+            conn.close()
+            return jsonify({'error': 'Invalid role. Must be "readonly" or "admin"'}), 400
+
+        # If changing from admin to readonly, check if this is the last admin
+        if user['role'] == 'admin' and data['role'] != 'admin':
+            admin_count = cursor.execute("""
+                SELECT COUNT(*) as count FROM users WHERE role = 'admin'
+            """).fetchone()['count']
+
+            if admin_count <= 1:
+                conn.close()
+                return jsonify({'error': 'Cannot change the last admin user\'s role. There must be at least one admin account.'}), 400
+
+        update_fields.append('role = ?')
+        update_values.append(data['role'])
+
+    if 'is_active' in data:
+        # If deactivating an admin, check if this is the last active admin
+        if user['role'] == 'admin' and not data['is_active']:
+            active_admin_count = cursor.execute("""
+                SELECT COUNT(*) as count FROM users WHERE role = 'admin' AND is_active = 1
+            """).fetchone()['count']
+
+            if active_admin_count <= 1:
+                conn.close()
+                return jsonify({'error': 'Cannot deactivate the last active admin user. There must be at least one active admin account.'}), 400
+
+        update_fields.append('is_active = ?')
+        update_values.append(1 if data['is_active'] else 0)
+
+    if not update_fields:
+        conn.close()
+        return jsonify({'error': 'No valid fields to update'}), 400
+
+    # Add user_id to values for WHERE clause
+    update_values.append(user_id)
+
+    # Execute update
+    cursor.execute(f"""
+        UPDATE users
+        SET {', '.join(update_fields)}
+        WHERE user_id = ?
+    """, update_values)
+
+    conn.commit()
+
+    # Get updated user
+    updated_user = cursor.execute("""
+        SELECT user_id, username, email, role, created_at, last_login, is_active
+        FROM users
+        WHERE user_id = ?
+    """, (user_id,)).fetchone()
+
+    conn.close()
+
+    return jsonify({
+        'success': True,
+        'message': 'User updated successfully',
+        'user': dict(updated_user)
+    })
+
+
+@app.route('/api/users/<int:user_id>', methods=['DELETE'])
+@require_admin
+def delete_user(user_id):
+    """Delete user (admin only)."""
+    # Prevent admin from deleting themselves
+    if request.current_user['user_id'] == user_id:
+        return jsonify({'error': 'Cannot delete your own account'}), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Check if user exists and get their role
+    user = cursor.execute("""
+        SELECT user_id, role FROM users WHERE user_id = ?
+    """, (user_id,)).fetchone()
+
+    if not user:
+        conn.close()
+        return jsonify({'error': 'User not found'}), 404
+
+    # If deleting an admin, check if they're the last admin
+    if user['role'] == 'admin':
+        admin_count = cursor.execute("""
+            SELECT COUNT(*) as count FROM users WHERE role = 'admin'
+        """).fetchone()['count']
+
+        if admin_count <= 1:
+            conn.close()
+            return jsonify({'error': 'Cannot delete the last admin user. There must be at least one admin account.'}), 400
+
+    # Delete user's sessions first
+    cursor.execute("""
+        DELETE FROM sessions WHERE user_id = ?
+    """, (user_id,))
+
+    # Delete user
+    cursor.execute("""
+        DELETE FROM users WHERE user_id = ?
+    """, (user_id,))
+
+    conn.commit()
+    conn.close()
+
+    return jsonify({
+        'success': True,
+        'message': 'User deleted successfully'
+    })
+
+
+@app.route('/api/users/<int:user_id>/password', methods=['PUT'])
+@require_admin
+def change_user_password(user_id):
+    """Change user password (admin only)."""
+    data = request.get_json()
+
+    if not data or 'password' not in data:
+        return jsonify({'error': 'Password required'}), 400
+
+    password = data['password']
+
+    # Validate password strength
+    if len(password) < 8:
+        return jsonify({'error': 'Password must be at least 8 characters'}), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Check if user exists
+    user = cursor.execute("""
+        SELECT user_id FROM users WHERE user_id = ?
+    """, (user_id,)).fetchone()
+
+    if not user:
+        conn.close()
+        return jsonify({'error': 'User not found'}), 404
+
+    # Hash password and update
+    password_hash = hash_password(password)
+
+    cursor.execute("""
+        UPDATE users
+        SET password_hash = ?
+        WHERE user_id = ?
+    """, (password_hash, user_id))
+
+    conn.commit()
+    conn.close()
+
+    return jsonify({
+        'success': True,
+        'message': 'Password changed successfully'
+    })
 
 
 @app.route('/api/properties')
@@ -562,7 +819,8 @@ def get_network(network_id):
                n.city, n.region, n.country_name, n.country_code,
                n.latitude, n.longitude, n.timezone, n.postal_code,
                n.download_target, n.upload_target,
-               n.gateway_speed_down, n.gateway_speed_up, n.speed_test_date
+               n.gateway_speed_down, n.gateway_speed_up, n.speed_test_date,
+               n.equip_name, n.router_7x50
         FROM networks n
         JOIN properties p ON n.property_id = p.property_id
         WHERE n.network_id = ?
@@ -571,8 +829,6 @@ def get_network(network_id):
     if not network_info:
         conn.close()
         return jsonify({'error': 'Network not found'}), 404
-
-    conn.close()
 
     # Convert to dict and handle bytes fields
     result = dict(network_info)
@@ -584,6 +840,41 @@ def get_network(network_id):
                 result[key] = value.decode('utf-8')
             except:
                 result[key] = None
+
+    # Get OLT shelf name from equip_name (first 11 characters)
+    olt_shelf_name = None
+    if result.get('equip_name') and len(result['equip_name']) >= 11:
+        olt_shelf_name = result['equip_name'][:11]
+
+    # Get xPON shelf info for this specific network's OLT
+    xpon_shelf = None
+    if olt_shelf_name:
+        shelf_info = conn.execute("""
+            SELECT xs.shelf_name
+            FROM xpon_shelves xs
+            WHERE xs.shelf_name = ?
+        """, (olt_shelf_name,)).fetchone()
+
+        if shelf_info:
+            xpon_shelf = {'shelf_name': shelf_info['shelf_name']}
+
+    # Get 7x50 router info for this specific network
+    router_7x50 = None
+    if result.get('router_7x50'):
+        router_info = conn.execute("""
+            SELECT r.router_name
+            FROM router_7x50s r
+            WHERE r.router_name = ?
+        """, (result['router_7x50'],)).fetchone()
+
+        if router_info:
+            router_7x50 = {'router_name': router_info['router_name']}
+
+    conn.close()
+
+    # Add filtered equipment information
+    result['xpon_shelf'] = xpon_shelf
+    result['router_7x50_info'] = router_7x50
 
     return jsonify(result)
 
@@ -1433,4 +1724,4 @@ if __name__ == '__main__':
     print(f"API will be available at: http://localhost:5000")
     print(f"API documentation at: http://localhost:5000/")
     
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=False, host='0.0.0.0', port=5000)

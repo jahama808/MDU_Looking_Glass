@@ -1,553 +1,616 @@
-# Emergency Deployment Guide
+# Emergency Deployment Guide - MDU Performance Dashboard
 
-This guide provides step-by-step instructions for deploying the Property Outage Dashboard to a new Ubuntu server in an emergency scenario (server crash, hardware failure, migration, etc.).
+This guide provides instructions for creating backups and performing emergency deployments to a new server.
 
 ## Table of Contents
-
-1. [Prerequisites](#prerequisites)
-2. [Quick Start (5 Minutes)](#quick-start-5-minutes)
-3. [What Gets Deployed](#what-gets-deployed)
-4. [Creating Regular Backups](#creating-regular-backups)
-5. [Restoring from Backup](#restoring-from-backup)
-6. [Manual Deployment Steps](#manual-deployment-steps)
-7. [Post-Deployment Checklist](#post-deployment-checklist)
-8. [Troubleshooting](#troubleshooting)
+- [Quick Start](#quick-start)
+- [Creating a Backup](#creating-a-backup)
+- [Emergency Restore](#emergency-restore)
+- [Manual Deployment](#manual-deployment)
+- [Verification](#verification)
+- [Troubleshooting](#troubleshooting)
 
 ---
 
-## Prerequisites
+## Quick Start
 
-### New Server Requirements
+### Create Backup (Current Server)
+```bash
+cd /path/to/mdu-dashboard
+./emergency-backup.sh
+```
 
-- **OS**: Ubuntu 20.04 LTS or later (recommended: Ubuntu 22.04 LTS)
-- **RAM**: 2GB minimum, 4GB recommended
-- **Disk**: 10GB free space minimum
-- **Network**: Internet connection (for initial setup)
-- **Access**: Root or sudo privileges
+### Restore on New Server
+```bash
+# 1. Copy backup to new server
+scp backups/mdu-dashboard-*.tar.gz user@new-server:/tmp/
 
-### Files You Need
-
-1. **Application backup** (created with `create-backup.sh`)
-2. **SSH access** to the new server
-3. **Optional**: Database backup if you have a separate one
+# 2. On new server, extract and restore
+cd /tmp
+tar -xzf mdu-dashboard-*.tar.gz
+cd mdu-dashboard-*
+sudo ./emergency-restore.sh
+```
 
 ---
 
-## Quick Start (5 Minutes)
+## Creating a Backup
 
-This is the fastest way to deploy in an emergency.
-
-### On Your Current/Backup Server
-
-```bash
-# 1. Create a backup (if the server is still accessible)
-./create-backup.sh
-
-# This creates: backups/outage-dashboard-backup-YYYY-MM-DD_HHMMSS.tar.gz
-```
-
-### On the New Ubuntu Server
-
-```bash
-# 1. Copy the backup to the new server
-scp backups/outage-dashboard-backup-*.tar.gz user@new-server:/tmp/
-
-# 2. SSH into the new server
-ssh user@new-server
-
-# 3. Extract the backup
-cd ~
-mkdir outage-dashboard
-cd outage-dashboard
-tar -xzf /tmp/outage-dashboard-backup-*.tar.gz
-
-# 4. Run the emergency install script
-sudo ./emergency-install.sh
-
-# 5. That's it! The dashboard should now be running
-```
-
-Access the dashboard at: `http://NEW_SERVER_IP`
-
----
-
-## What Gets Deployed
-
-The emergency installation script automatically:
-
-### System Components
-- ✓ Python 3.8+ and pip
-- ✓ Node.js 18.x LTS and npm
-- ✓ Nginx (reverse proxy)
-- ✓ SQLite3
-- ✓ Git and curl
-
-### Application Components
-- ✓ Flask API server (runs on port 5000)
-- ✓ React frontend (builds and serves on port 5173)
-- ✓ Database with all outage data
-- ✓ All Python dependencies
-- ✓ All Node.js dependencies
-
-### Services & Automation
-- ✓ Systemd service for API (auto-starts on boot)
-- ✓ Systemd service for frontend (auto-starts on boot)
-- ✓ Auto-processing timer (runs every 6 hours)
-- ✓ Nginx reverse proxy configuration
-
-### Firewall Configuration
-- ✓ SSH (port 22)
-- ✓ HTTP (port 80)
-- ✓ HTTPS (port 443)
-
----
-
-## Creating Regular Backups
-
-**IMPORTANT**: Create backups regularly (daily recommended) to ensure quick recovery.
-
-### Automated Backups (Recommended)
-
-Set up a daily cron job:
-
-```bash
-# Edit crontab
-crontab -e
-
-# Add this line (runs daily at 2 AM)
-0 2 * * * /path/to/outage-dashboard/create-backup.sh /path/to/backup/location
-
-# For example:
-0 2 * * * /home/user/outage-dashboard/create-backup.sh /mnt/backup/outage-dashboard
-```
-
-### Manual Backup
-
-```bash
-cd /path/to/outage-dashboard
-./create-backup.sh [optional-backup-directory]
-
-# Example:
-./create-backup.sh /mnt/external-drive/backups
-```
+The `emergency-backup.sh` script creates a comprehensive backup of your entire MDU Performance Dashboard installation.
 
 ### What Gets Backed Up
 
-**Full Backup** (complete application):
-- Database (`output/outages.db`)
-- All application code
-- Frontend code
-- Configuration files
-- Processing logs
-- Archived data
+- **Database**: `property_outages.db` (all network outages and properties)
+- **Cron Jobs**: Exported crontab configuration
+- **Application Code**: All Python scripts, shell scripts, batch files
+- **Frontend**: React application (without node_modules for smaller size)
+- **Recent Logs**: Last 30 days of application logs
+- **Processing Reports**: Last 30 days of processing reports
+- **Archived Data**: Last 7 days of archived input files
+- **Configuration**: `.env` file (if exists) with sensitive credentials
 
-**Essential Backup** (database only):
-- Database (`output/outages.db`)
-- Processing logs (`logs/`)
-- Archived data (`inputs_already_read/`)
+### Creating a Backup
 
-### Backup Retention
+```bash
+# Run from the application directory
+./emergency-backup.sh
 
-- Backups older than 7 days are automatically deleted
-- Modify retention in `create-backup.sh` if needed
+# Or specify a custom backup location
+./emergency-backup.sh /path/to/backup/location
+```
+
+### Backup File Format
+
+- **Naming**: `mdu-dashboard-YYYY-MM-DD_HHMMSS.tar.gz`
+- **Location**: `./backups/` (default) or custom directory
+- **Retention**: Automatically keeps last 14 days of backups
+- **Compression**: Gzip compressed tar archive
+
+### Example Output
+
+```
+============================================================
+MDU Performance Dashboard - COMPREHENSIVE BACKUP
+============================================================
+
+[1/7] Backing up database...
+✓ Database backed up
+
+[2/7] Backing up cron jobs...
+✓ Cron jobs backed up
+
+[3/7] Backing up environment and configuration...
+✓ .env file backed up
+
+[4/7] Backing up application code...
+✓ Application code backed up
+
+[5/7] Backing up frontend...
+✓ Frontend backed up
+
+[6/7] Backing up data and logs...
+✓ Data and logs backed up
+
+[7/7] Creating backup metadata...
+✓ Metadata created
+
+============================================================
+BACKUP COMPLETE!
+============================================================
+
+Backup Details:
+  File: /path/to/backups/mdu-dashboard-2025-11-18_120000.tar.gz
+  Size: 125M
+  Database: 89M
+```
 
 ---
 
-## Restoring from Backup
+## Emergency Restore
 
-### Full Restore (New Server)
+The `emergency-restore.sh` script automates the complete restoration of your MDU Performance Dashboard on a new server.
+
+### Prerequisites
+
+- Ubuntu/Debian or RedHat/CentOS/Fedora server
+- Root or sudo access
+- Internet connection (for installing dependencies)
+
+### Supported Operating Systems
+
+- Ubuntu 18.04+
+- Debian 9+
+- CentOS 7+
+- RHEL 7+
+- Fedora 30+
+
+### Installation Steps
+
+#### 1. Transfer Backup to New Server
 
 ```bash
-# 1. Copy application code to new server
-scp -r /path/to/outage-dashboard user@new-server:~/
-
-# 2. SSH to new server
-ssh user@new-server
-
-# 3. Run emergency install
-cd ~/outage-dashboard
-sudo ./emergency-install.sh
-
-# Done! Services are now running with your data
+# From your local machine or current server
+scp backups/mdu-dashboard-2025-11-18_120000.tar.gz user@new-server:/tmp/
 ```
 
-### Restore Database Only (Existing Installation)
+#### 2. Extract Backup
 
 ```bash
-# 1. Stop services
-sudo systemctl stop outage-dashboard-api
+# On the new server
+cd /tmp
+tar -xzf mdu-dashboard-2025-11-18_120000.tar.gz
+cd mdu-dashboard-2025-11-18_120000
+```
 
-# 2. Backup current database (just in case)
-cp output/outages.db output/outages.db.backup
+#### 3. Run Restore Script
 
-# 3. Restore from backup
-tar -xzf /path/to/backup.tar.gz output/outages.db
+**Basic restore (default options):**
+```bash
+sudo ./emergency-restore.sh
+```
 
-# 4. Restart services
-sudo systemctl start outage-dashboard-api
+**Custom installation directory:**
+```bash
+sudo ./emergency-restore.sh --install-dir /home/user/mdu-dashboard
+```
+
+**Custom ports:**
+```bash
+sudo ./emergency-restore.sh --api-port 8080 --frontend-port 8081
+```
+
+**Without systemd services (manual start):**
+```bash
+sudo ./emergency-restore.sh --no-services
+```
+
+### Restore Script Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--install-dir PATH` | Installation directory | `/opt/mdu-dashboard` |
+| `--api-port PORT` | API server port | `5000` |
+| `--frontend-port PORT` | Frontend server port | `3000` |
+| `--no-services` | Don't create systemd services | Services created |
+| `--help` | Show help message | - |
+
+### What the Restore Script Does
+
+1. **Detects OS** and installs required system dependencies
+2. **Creates installation directory** (default: `/opt/mdu-dashboard`)
+3. **Copies all application files** from backup
+4. **Sets up Python virtual environment** and installs dependencies
+5. **Builds frontend** for production
+6. **Restores database** (`property_outages.db`)
+7. **Restores cron jobs** (with path updates)
+8. **Sets file permissions** appropriately
+9. **Creates systemd services** for API and frontend
+10. **Starts services** and verifies they're running
+11. **Displays access information** and next steps
+
+### Example Restore Output
+
+```
+============================================================
+MDU Performance Dashboard - EMERGENCY RESTORE
+============================================================
+
+Configuration:
+  Installation directory: /opt/mdu-dashboard
+  API port: 5000
+  Frontend port: 3000
+  Create systemd services: true
+
+[1/11] Detecting operating system...
+✓ Detected: Ubuntu 22.04.3 LTS
+
+[2/11] Installing system dependencies...
+✓ Dependencies installed (apt)
+
+[3/11] Creating installation directory...
+✓ Created /opt/mdu-dashboard
+
+[4/11] Copying application files...
+✓ Application files copied
+
+[5/11] Setting up Python virtual environment...
+✓ Python dependencies installed
+
+[6/11] Setting up frontend...
+✓ Frontend dependencies installed
+✓ Frontend built for production
+
+[7/11] Restoring database...
+✓ Database restored (property_outages.db)
+  Database size: 89M
+
+[8/11] Restoring cron jobs...
+✓ Cron jobs installed
+
+[9/11] Setting file permissions...
+✓ Permissions configured
+
+[10/11] Creating systemd services...
+✓ Created mdu-api.service
+✓ Created mdu-frontend.service
+✓ Services enabled
+
+[11/11] Starting services...
+✓ API server started
+✓ Frontend server started
+
+============================================================
+RESTORE COMPLETE!
+============================================================
+
+Access the application:
+  http://192.168.1.100:3000
+  http://localhost:3000
 ```
 
 ---
 
-## Manual Deployment Steps
+## Manual Deployment
 
-If you need to understand what the emergency script does, here's the manual process:
+If you prefer not to use the automated restore script, here are manual deployment instructions.
 
 ### 1. Install System Dependencies
 
+**Ubuntu/Debian:**
 ```bash
-# Update system
 sudo apt-get update
-sudo apt-get upgrade -y
-
-# Install Python
-sudo apt-get install -y python3 python3-pip python3-venv
-
-# Install Node.js 18.x
-curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-sudo apt-get install -y nodejs
-
-# Install additional tools
-sudo apt-get install -y git sqlite3 nginx curl
+sudo apt-get install -y python3 python3-pip python3-venv nodejs npm sqlite3 rsync
 ```
 
-### 2. Set Up Application
+**CentOS/RHEL:**
+```bash
+sudo yum install -y python3 python3-pip nodejs npm sqlite rsync
+```
+
+### 2. Extract Backup
 
 ```bash
-# Copy application files to server
-cd ~
-mkdir -p outage-dashboard
-cd outage-dashboard
+cd /opt
+sudo tar -xzf /tmp/mdu-dashboard-*.tar.gz
+sudo mv mdu-dashboard-* mdu-dashboard
+cd mdu-dashboard
+```
 
-# Extract backup or clone repository
-tar -xzf /path/to/backup.tar.gz
+### 3. Set Up Python Environment
 
-# Create Python virtual environment
+```bash
 python3 -m venv venv
 source venv/bin/activate
 pip install --upgrade pip
-pip install flask flask-cors pandas
+pip install -r requirements.txt
+```
 
-# Install Node.js dependencies and build frontend
+### 4. Set Up Frontend
+
+```bash
 cd frontend
 npm install
 npm run build
 cd ..
 ```
 
-### 3. Create Systemd Services
-
-**API Service:** `/etc/systemd/system/outage-dashboard-api.service`
-
-```ini
-[Unit]
-Description=Property Outage Dashboard - API Server
-After=network.target
-
-[Service]
-Type=simple
-User=YOUR_USERNAME
-WorkingDirectory=/home/YOUR_USERNAME/outage-dashboard
-Environment="PATH=/home/YOUR_USERNAME/outage-dashboard/venv/bin"
-ExecStart=/home/YOUR_USERNAME/outage-dashboard/venv/bin/python /home/YOUR_USERNAME/outage-dashboard/api_server.py
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-```
-
-**Frontend Service:** `/etc/systemd/system/outage-dashboard-frontend.service`
-
-```ini
-[Unit]
-Description=Property Outage Dashboard - Frontend Server
-After=network.target
-
-[Service]
-Type=simple
-User=YOUR_USERNAME
-WorkingDirectory=/home/YOUR_USERNAME/outage-dashboard/frontend/dist
-ExecStart=/usr/bin/python3 -m http.server 5173
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-```
-
-**Enable and Start Services:**
+### 5. Restore Cron Jobs
 
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable outage-dashboard-api outage-dashboard-frontend
-sudo systemctl start outage-dashboard-api outage-dashboard-frontend
+# Edit paths in crontab.txt to match new installation
+nano crontab.txt
+
+# Install crontab
+crontab crontab.txt
 ```
 
-### 4. Configure Nginx
+### 6. Start Services Manually
 
-Create `/etc/nginx/sites-available/outage-dashboard`:
+**Terminal 1 - API Server:**
+```bash
+cd /opt/mdu-dashboard
+source venv/bin/activate
+python3 api_server.py
+```
 
+**Terminal 2 - Frontend:**
+```bash
+cd /opt/mdu-dashboard/frontend/dist
+python3 -m http.server 3000
+```
+
+### 7. Create Systemd Services (Optional)
+
+**API Service (`/etc/systemd/system/mdu-api.service`):**
+```ini
+[Unit]
+Description=MDU Performance Dashboard API Server
+After=network.target
+
+[Service]
+Type=simple
+User=your-user
+WorkingDirectory=/opt/mdu-dashboard
+Environment="PATH=/opt/mdu-dashboard/venv/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/opt/mdu-dashboard/venv/bin/python3 /opt/mdu-dashboard/api_server.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+
+**Frontend Service (`/etc/systemd/system/mdu-frontend.service`):**
+```ini
+[Unit]
+Description=MDU Performance Dashboard Frontend
+After=network.target
+
+[Service]
+Type=simple
+User=your-user
+WorkingDirectory=/opt/mdu-dashboard/frontend/dist
+ExecStart=/usr/bin/python3 -m http.server 3000
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+
+**Enable and start:**
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable mdu-api mdu-frontend
+sudo systemctl start mdu-api mdu-frontend
+```
+
+---
+
+## Verification
+
+### Check Services
+
+```bash
+# Check service status
+sudo systemctl status mdu-api
+sudo systemctl status mdu-frontend
+
+# View logs
+sudo journalctl -u mdu-api -f
+sudo journalctl -u mdu-frontend -f
+```
+
+### Check Database
+
+```bash
+cd /opt/mdu-dashboard
+sqlite3 property_outages.db
+
+# Check outage count
+SELECT COUNT(*) FROM outages;
+
+# Check network count
+SELECT COUNT(*) FROM networks;
+
+# Check recent outages
+SELECT * FROM outages ORDER BY last_seen DESC LIMIT 10;
+
+.quit
+```
+
+### Check Cron Jobs
+
+```bash
+# List cron jobs
+crontab -l
+
+# Check cron logs
+grep CRON /var/log/syslog
+```
+
+### Access Application
+
+Open your browser and navigate to:
+```
+http://your-server-ip:3000
+```
+
+Default credentials (if not changed):
+- Username: `admin`
+- Password: (whatever was set in your original installation)
+
+---
+
+## Troubleshooting
+
+### Service Won't Start
+
+**Check logs:**
+```bash
+sudo journalctl -u mdu-api -n 50
+sudo journalctl -u mdu-frontend -n 50
+```
+
+**Check port conflicts:**
+```bash
+sudo netstat -tlnp | grep :5000
+sudo netstat -tlnp | grep :3000
+```
+
+**Manually test API:**
+```bash
+cd /opt/mdu-dashboard
+source venv/bin/activate
+python3 api_server.py
+# Look for errors in output
+```
+
+### Database Issues
+
+**Check database permissions:**
+```bash
+ls -la /opt/mdu-dashboard/property_outages.db
+sudo chown your-user:your-user /opt/mdu-dashboard/property_outages.db
+```
+
+**Test database connection:**
+```bash
+sqlite3 /opt/mdu-dashboard/property_outages.db "SELECT COUNT(*) FROM outages;"
+```
+
+### Frontend Not Loading
+
+**Check if build exists:**
+```bash
+ls -la /opt/mdu-dashboard/frontend/dist/
+```
+
+**Rebuild frontend:**
+```bash
+cd /opt/mdu-dashboard/frontend
+npm install
+npm run build
+```
+
+### Cron Jobs Not Running
+
+**Check cron service:**
+```bash
+sudo systemctl status cron  # Ubuntu/Debian
+sudo systemctl status crond  # CentOS/RHEL
+```
+
+**Check cron logs:**
+```bash
+grep CRON /var/log/syslog | tail -20
+```
+
+**Verify paths in crontab:**
+```bash
+crontab -l
+# Make sure all paths point to /opt/mdu-dashboard
+```
+
+### Python Module Missing
+
+**Reinstall dependencies:**
+```bash
+cd /opt/mdu-dashboard
+source venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+---
+
+## Production Recommendations
+
+### 1. Use a Reverse Proxy
+
+Set up nginx or Apache as a reverse proxy for better security and performance.
+
+**Example nginx configuration:**
 ```nginx
 server {
     listen 80;
-    server_name _;
+    server_name your-domain.com;
 
+    # Redirect to HTTPS
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name your-domain.com;
+
+    ssl_certificate /etc/ssl/certs/your-cert.pem;
+    ssl_certificate_key /etc/ssl/private/your-key.pem;
+
+    # Frontend
     location / {
-        proxy_pass http://localhost:5173;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
+        proxy_pass http://localhost:3000;
         proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
     }
 
-    location /api/ {
+    # API
+    location /api {
         proxy_pass http://localhost:5000;
-        proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
     }
 }
 ```
 
-Enable and restart:
+### 2. Configure Firewall
 
 ```bash
-sudo ln -s /etc/nginx/sites-available/outage-dashboard /etc/nginx/sites-enabled/
-sudo rm /etc/nginx/sites-enabled/default
-sudo nginx -t
-sudo systemctl restart nginx
-```
-
-### 5. Configure Firewall
-
-```bash
-sudo ufw allow ssh
+# Ubuntu/Debian
 sudo ufw allow 80/tcp
 sudo ufw allow 443/tcp
 sudo ufw enable
+
+# CentOS/RHEL
+sudo firewall-cmd --permanent --add-service=http
+sudo firewall-cmd --permanent --add-service=https
+sudo firewall-cmd --reload
 ```
 
----
+### 3. Set Up SSL Certificates
 
-## Post-Deployment Checklist
-
-After deployment, verify everything is working:
-
-### 1. Check Services
-
+Use Let's Encrypt for free SSL certificates:
 ```bash
-# Check API service
-sudo systemctl status outage-dashboard-api
-curl http://localhost:5000/api/stats
-
-# Check frontend service
-sudo systemctl status outage-dashboard-frontend
-
-# Check auto-processing timer
-sudo systemctl status outage-auto-process.timer
-sudo systemctl list-timers outage-auto-process.timer
+sudo apt-get install certbot python3-certbot-nginx
+sudo certbot --nginx -d your-domain.com
 ```
 
-### 2. Check Web Access
+### 4. Regular Backups
 
+Add a daily backup cron job:
 ```bash
-# Get server IP
-hostname -I
+crontab -e
 
-# Access from browser:
-# http://YOUR_SERVER_IP
+# Add this line (runs daily at 2 AM)
+0 2 * * * /opt/mdu-dashboard/emergency-backup.sh
 ```
 
-### 3. Verify Data
+### 5. Monitoring
 
-- Open the dashboard in a browser
-- Check that properties are showing
-- Verify outage counts match expectations
-- Check equipment pages (xPON, 7x50)
-
-### 4. Test Auto-Processing
-
+Set up basic monitoring:
 ```bash
-# Place a test file in inputs/
-cp /path/to/test-wan-file.csv inputs/
-cp /path/to/test-eero-file.csv inputs/
+# Install monitoring tools
+sudo apt-get install htop iotop
 
-# Run manual processing test
-./auto-process-data.sh
-
-# Check logs
-tail -f logs/auto-process.log
+# Monitor service health
+watch -n 5 'systemctl status mdu-api mdu-frontend'
 ```
-
-### 5. Verify Logs
-
-```bash
-# API logs
-sudo journalctl -u outage-dashboard-api -f
-
-# Frontend logs
-sudo journalctl -u outage-dashboard-frontend -f
-
-# Auto-processing logs
-tail -f logs/auto-process.log
-```
-
----
-
-## Troubleshooting
-
-### Services Won't Start
-
-```bash
-# Check service status and logs
-sudo systemctl status outage-dashboard-api
-sudo journalctl -u outage-dashboard-api -n 50
-
-# Common issues:
-# 1. Port already in use
-sudo lsof -i :5000
-sudo lsof -i :5173
-
-# 2. Permission issues
-sudo chown -R $USER:$USER /path/to/outage-dashboard
-
-# 3. Missing dependencies
-source venv/bin/activate
-pip install flask flask-cors pandas
-```
-
-### Database Not Found
-
-```bash
-# Check database exists
-ls -la output/outages.db
-
-# If missing, process some data
-./auto-process-data.sh
-# Or manually:
-source venv/bin/activate
-python process_property_outages_db.py \
-  --outages-file <file> \
-  --discovery-file <file>
-```
-
-### Nginx 502 Bad Gateway
-
-```bash
-# Check backend services are running
-sudo systemctl status outage-dashboard-api
-sudo systemctl status outage-dashboard-frontend
-
-# Check nginx configuration
-sudo nginx -t
-
-# Check nginx logs
-sudo tail -f /var/log/nginx/error.log
-```
-
-### Firewall Blocking Access
-
-```bash
-# Check firewall status
-sudo ufw status
-
-# Allow HTTP if not already
-sudo ufw allow 80/tcp
-sudo ufw reload
-
-# Or temporarily disable for testing
-sudo ufw disable
-```
-
-### Auto-Processing Not Running
-
-```bash
-# Check timer is active
-sudo systemctl status outage-auto-process.timer
-
-# Check timer schedule
-sudo systemctl list-timers outage-auto-process.timer
-
-# Run manually to test
-./auto-process-data.sh
-
-# Check logs
-tail -f logs/auto-process.log
-```
-
----
-
-## Additional Notes
-
-### Production Hardening (Optional)
-
-For production deployment, consider:
-
-1. **HTTPS/SSL**:
-   ```bash
-   sudo apt-get install certbot python3-certbot-nginx
-   sudo certbot --nginx -d your-domain.com
-   ```
-
-2. **Monitoring**:
-   - Set up log rotation
-   - Configure monitoring/alerting
-   - Set up database backups to external storage
-
-3. **Security**:
-   - Change default SSH port
-   - Set up fail2ban
-   - Regular system updates
-   - Restrict API access if needed
-
-### Backup Best Practices
-
-1. **Store backups off-site**
-   - Use external storage/cloud
-   - Keep at least 3 copies in different locations
-
-2. **Test restores regularly**
-   - Perform test restores monthly
-   - Document recovery time
-
-3. **Automate everything**
-   - Automated daily backups
-   - Automated backup verification
-   - Alerts if backups fail
-
-### Performance Tuning
-
-For large deployments:
-
-1. **Database**: Consider PostgreSQL instead of SQLite
-2. **Frontend**: Use nginx to serve static files directly
-3. **API**: Use gunicorn with multiple workers
-4. **Caching**: Add Redis for API caching
 
 ---
 
 ## Support
 
-For issues during emergency deployment:
-
-1. Check service logs: `sudo journalctl -u outage-dashboard-api -f`
-2. Check application logs: `tail -f logs/auto-process.log`
-3. Review this document's troubleshooting section
-4. Check README.md for general documentation
-
-## Emergency Contact Checklist
-
-Keep this information handy for emergencies:
-
-- [ ] Backup location: ____________________
-- [ ] Server IP/hostname: ____________________
-- [ ] SSH credentials: ____________________
-- [ ] Database admin contact: ____________________
-- [ ] Last successful backup date: ____________________
+For issues or questions:
+1. Check the logs: `sudo journalctl -u mdu-api -n 100`
+2. Review the processing reports in `processing_reports/`
+3. Check cron logs for scheduled job failures
 
 ---
 
-**Last Updated**: 2025-11-08
-**Version**: 1.0
+## Backup Retention Policy
+
+The emergency backup script automatically:
+- Creates timestamped backups
+- Keeps the last 14 days of backups
+- Deletes older backups automatically
+
+To change retention:
+```bash
+# Edit emergency-backup.sh line 203
+find "$BACKUP_DIR" -name "mdu-dashboard-*.tar.gz" -mtime +30 -delete  # 30 days
+```
+
+---
+
+**Last Updated:** 2025-11-18
+**Version:** 2.0

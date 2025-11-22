@@ -119,6 +119,39 @@ function NetworkDetail() {
         </div>
       </div>
 
+      {(network.xpon_shelf || network.router_7x50_info) && (
+        <div className="equipment-section">
+          <h2>Network Equipment</h2>
+          <div className="equipment-grid">
+            {network.xpon_shelf && (
+              <div className="equipment-card">
+                <h3>xPON OLT Shelf</h3>
+                <div className="equipment-list">
+                  <div className="equipment-item">
+                    <div className="equipment-name">{network.xpon_shelf.shelf_name}</div>
+                    {network.equip_name && (
+                      <div className="equipment-details">
+                        <span className="olt-id">OLT ID: {network.equip_name}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+            {network.router_7x50_info && (
+              <div className="equipment-card">
+                <h3>7x50 Router</h3>
+                <div className="equipment-list">
+                  <div className="equipment-item">
+                    <div className="equipment-name">{network.router_7x50_info.router_name}</div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {ongoingOutages.length > 0 && (
         <div className="ongoing-outages-section">
           <h2>🔴 Network Currently Down</h2>

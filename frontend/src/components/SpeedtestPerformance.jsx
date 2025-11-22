@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
 import { Link, useNavigate } from 'react-router-dom'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import './SpeedtestPerformance.css'
 
 function SpeedtestPerformance() {
@@ -47,6 +48,38 @@ function SpeedtestPerformance() {
       return a.upload.pass_percentage - b.upload.pass_percentage
     })
 
+  // Calculate distribution statistics for filtered data
+  const calculateDistribution = (data, type) => {
+    const tiers = [
+      { range: '90-100%', min: 90, max: 100, count: 0 },
+      { range: '80-90%', min: 80, max: 90, count: 0 },
+      { range: '70-80%', min: 70, max: 80, count: 0 },
+      { range: '60-70%', min: 60, max: 70, count: 0 },
+      { range: '50-60%', min: 50, max: 60, count: 0 },
+      { range: 'Below 50%', min: 0, max: 50, count: 0 }
+    ]
+
+    data.forEach(property => {
+      const percentage = property[type].pass_percentage
+      for (let tier of tiers) {
+        if (percentage >= tier.min && percentage < tier.max) {
+          tier.count++
+          break
+        }
+        // Handle 100% edge case
+        if (percentage === 100 && tier.max === 100) {
+          tier.count++
+          break
+        }
+      }
+    })
+
+    return tiers
+  }
+
+  const downloadDistribution = calculateDistribution(filteredData, 'download')
+  const uploadDistribution = calculateDistribution(filteredData, 'upload')
+
   if (loading) {
     return <div className="loading">Loading speedtest performance data...</div>
   }
@@ -59,9 +92,13 @@ function SpeedtestPerformance() {
     <div className="speedtest-performance">
       <div className="speedtest-header">
         <h1>Speedtest Performance by Property</h1>
-        <p className="subtitle">
-          Showing networks with actual speeds at 85% or higher of target speeds vs below 85%
-        </p>
+
+        <div className="info-box">
+          <div className="info-icon">ℹ️</div>
+          <div className="info-content">
+            Pass/Fail performance is based on the results achieved by the integrated eero speedtest compared against the provisioned service for a given network. A network that achieves a speedtest result that is 85% or better than the provisioned speed is considered a pass.
+          </div>
+        </div>
 
         <div className="view-toggle-container">
           <button
@@ -96,6 +133,45 @@ function SpeedtestPerformance() {
               <option key={island} value={island}>{island}</option>
             ))}
           </select>
+        </div>
+      </div>
+
+      {/* Statistics Section */}
+      <div className="statistics-section">
+        <h2>Performance Distribution Statistics</h2>
+        <p className="stats-subtitle">
+          Distribution of properties by pass percentage tiers
+          {selectedIsland !== 'All' && <span className="island-filter-label"> for {selectedIsland}</span>}
+        </p>
+
+        <div className="statistics-grid">
+          <div className="stat-chart">
+            <h3>Download Performance Distribution</h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={downloadDistribution} margin={{ left: 10, right: 10, top: 10, bottom: 10 }}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="range" angle={-45} textAnchor="end" height={80} />
+                <YAxis label={{ value: 'Properties', angle: -90, position: 'insideLeft' }} />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="count" fill="#2196F3" name="Properties" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className="stat-chart">
+            <h3>Upload Performance Distribution</h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={uploadDistribution} margin={{ left: 10, right: 10, top: 10, bottom: 10 }}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="range" angle={-45} textAnchor="end" height={80} />
+                <YAxis label={{ value: 'Properties', angle: -90, position: 'insideLeft' }} />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="count" fill="#4CAF50" name="Properties" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </div>
       </div>
 

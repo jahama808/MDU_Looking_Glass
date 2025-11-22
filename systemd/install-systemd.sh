@@ -8,7 +8,7 @@ set -e
 SCRIPT_DIR="$( cd "$( dirname "$0" )" && pwd )"
 PROJECT_DIR="$( cd "$SCRIPT_DIR/.." && pwd )"
 
-echo "Property Outage Dashboard - Systemd Timer Installation"
+echo "MDU Performance Dashboard - Systemd Timer Installation"
 echo "========================================================"
 echo ""
 
@@ -28,7 +28,7 @@ echo ""
 # Create temporary service file with correct paths
 cat > /tmp/outage-auto-process.service <<EOF
 [Unit]
-Description=Property Outage Dashboard - Automated Data Processing
+Description=MDU Performance Dashboard - Automated Data Processing
 After=network.target
 
 [Service]

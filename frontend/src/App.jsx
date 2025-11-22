@@ -11,6 +11,7 @@ import XponShelfDetail from './components/XponShelfDetail'
 import Router7x50Detail from './components/Router7x50Detail'
 import SpeedtestPerformance from './components/SpeedtestPerformance'
 import SpeedtestTable from './components/SpeedtestTable'
+import AdminPortal from './components/AdminPortal'
 
 function AppContent() {
   const { authenticated, loading, user, login, logout } = useAuth()
@@ -33,7 +34,7 @@ function AppContent() {
       <div className="app">
         <header className="app-header">
           <nav>
-            <Link to="/" className="logo">Property Outage Dashboard</Link>
+            <Link to="/" className="logo">MDU Performance Dashboard</Link>
             <div className="nav-links">
               <Link to="/">Dashboard</Link>
               <Link to="/properties">Properties</Link>
@@ -41,7 +42,9 @@ function AppContent() {
               <Link to="/speedtest">Speedtest</Link>
             </div>
             <div className="user-menu">
-              <span className="user-name">{user?.username}</span>
+              {user?.role === 'admin' && (
+                <Link to="/admin" className="user-role-badge">Admin</Link>
+              )}
               <button onClick={logout} className="logout-button">
                 Logout
               </button>
@@ -60,11 +63,12 @@ function AppContent() {
             <Route path="/7x50/:id" element={<Router7x50Detail />} />
             <Route path="/speedtest" element={<SpeedtestPerformance />} />
             <Route path="/speedtest-table" element={<SpeedtestTable />} />
+            <Route path="/admin" element={<AdminPortal />} />
           </Routes>
         </main>
 
         <footer className="app-footer">
-          <p>Property Outage Monitoring System</p>
+          <p>Koko Crater Labs</p>
         </footer>
       </div>
     </Router>

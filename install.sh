@@ -1,12 +1,12 @@
 #!/bin/bash
 
-# Property Outage Dashboard - Installation Script (Linux/Mac)
+# MDU Performance Dashboard - Installation Script (Linux/Mac)
 # This script sets up the entire application environment
 
 set -e  # Exit on any error
 
 echo "========================================"
-echo "Property Outage Dashboard - Installer"
+echo "MDU Performance Dashboard - Installer"
 echo "========================================"
 echo ""
 
@@ -180,7 +180,7 @@ echo -e "${GREEN}✓ Created start-frontend.sh${NC}"
 cat > start-all.sh << 'EOF'
 #!/bin/bash
 
-echo "Starting Property Outage Dashboard..."
+echo "Starting MDU Performance Dashboard..."
 echo ""
 
 # Start backend in background
@@ -202,7 +202,7 @@ cd ..
 
 echo ""
 echo "========================================"
-echo "Property Outage Dashboard is running!"
+echo "MDU Performance Dashboard is running!"
 echo "========================================"
 echo ""
 echo "Frontend: http://localhost:5173"

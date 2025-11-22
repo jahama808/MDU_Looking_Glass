@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import './Login.css';
+import { API_BASE_URL } from '../config';
 
 function Login({ onLogin }) {
   const [username, setUsername] = useState('');
@@ -13,7 +14,7 @@ function Login({ onLogin }) {
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:5000/api/auth/login', {
+      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -47,7 +48,7 @@ function Login({ onLogin }) {
     <div className="login-container">
       <div className="login-card">
         <div className="login-header">
-          <h1>Property Outage Dashboard</h1>
+          <h1>MDU Performance Dashboard</h1>
           <p>Sign in to continue</p>
         </div>
 
@@ -94,12 +95,6 @@ function Login({ onLogin }) {
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
-
-        <div className="login-footer">
-          <p className="default-credentials">
-            Default credentials: admin / admin123
-          </p>
-        </div>
       </div>
     </div>
   );

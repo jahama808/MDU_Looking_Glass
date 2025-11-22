@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Create an admin user for the Property Outage Dashboard
+Create an admin user for the MDU Performance Dashboard
 
 Usage:
     python create_admin_user.py [--database path/to/database.db]
@@ -21,7 +21,7 @@ def hash_password(password):
 def create_admin_user(db_path):
     """Create an admin user interactively."""
     print("=" * 60)
-    print("Create Admin User for Property Outage Dashboard")
+    print("Create Admin User for MDU Performance Dashboard")
     print("=" * 60)
     print()
 
@@ -103,7 +103,7 @@ def create_admin_user(db_path):
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Create an admin user for the Property Outage Dashboard'
+        description='Create an admin user for the MDU Performance Dashboard'
     )
     parser.add_argument(
         '--database',
